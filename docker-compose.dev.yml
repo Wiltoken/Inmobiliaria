@@ -1,0 +1,21 @@
+services:
+  postgres:
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+
+  redis:
+    volumes:
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+
+  api:
+    volumes:
+      - .:/app
+    environment:
+      - APP_ENV=development
+      - LOG_LEVEL=DEBUG
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

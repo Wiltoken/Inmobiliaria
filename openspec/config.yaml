@@ -1,0 +1,41 @@
+# OpenSpec / SDD configuration — Inmobiliaria
+schema: spec-driven
+
+context: |
+  Project: Inmobiliaria — plataforma de matching inmobiliario.
+  Users: Compradores, Vendedores, Agentes, Admin.
+  Features: listados de propiedades (proyectos nuevos + vivienda usada), perfilado de compradores/vendedores,
+  motor de matching inteligente, gestión de agentes.
+  Stack: Python 3.14.4, FastAPI, SQLAlchemy 2.0 async, PostgreSQL, Redis.
+  Auth foundation available at ../auth-login-platform (reusable template).
+  Greenfield — no existing code.
+
+rules:
+  proposal:
+    - Define user personas first (buyer, seller, agent, admin)
+    - Map core workflows: publish property, search/browse, match, contact
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include entity-relationship diagram for the domain model
+    - Document matching algorithm approach
+    - Design for multi-role access with RBAC
+  tasks:
+    - Group by domain: properties, users, matching, messaging
+    - Keep tasks completable in one session
+  apply:
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+
+testing:
+  strict_tdd: false
+  detected: "2026-07-31"
+  layers:
+    unit: { available: true, tool: pytest }
+    integration: { available: true, tool: pytest-asyncio }
+    e2e: { available: true, tool: httpx }
