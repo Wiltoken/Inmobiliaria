@@ -1,11 +1,11 @@
-"""Buyer profile management endpoints.
+"""Profile management endpoints for all roles.
 
-GET    /api/v1/profiles/me          — get current user's buyer profile
-PUT    /api/v1/profiles/me          — update buyer preferences
-POST   /api/v1/profiles/me          — create buyer profile
+GET    /api/v1/profiles/me          — get profile based on role
+PUT    /api/v1/profiles/me          — update own profile
+PATCH  /api/v1/profiles/buyer       — update buyer preferences (triggers match recompute)
 
-NOTE: This module is Slice 4 (Buyer Profiles). The T-4.4 recompute trigger
-hook is included here so it can be wired once profiles.py is fully implemented.
+Buyer profiles, seller profiles, and agent profiles are all managed here.
+The role is detected from the user's roles at runtime.
 """
 
 from __future__ import annotations
@@ -22,54 +22,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_current_active_user, get_db
-from app.domain.models import BuyerProfile, User
+from app.domain.models import AgentProfile, BuyerProfile, SellerProfile, User
+from app.domain.schemas import (
+    AgentProfileResponse,
+    AgentProfileUpdate,
+    BuyerProfileResponse,
+    BuyerProfileUpdate,
+    PreferredLocationItem,
+    SellerProfileResponse,
+    SellerProfileUpdate,
+)
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/profiles", tags=["profiles"])
-
-
-# ── Schemas ────────────────────────────────────────────────────────────────────
-
-
-class PreferredLocationItem(BaseModel):
-    """Single preferred location with radius."""
-
-    lat: float
-    lon: float
-    radius_km: float = 5.0
-
-
-class BuyerProfileUpdate(BaseModel):
-    """PUT /api/v1/profiles/me request body."""
-
-    budget_min: float | None = None
-    budget_max: float | None = None
-    preferred_locations: list[PreferredLocationItem] | None = None
-    rooms_min: int | None = None
-    bathrooms_min: int | None = None
-    area_min: float | None = None
-    area_max: float | None = None
-    preferred_features: list[str] | None = None
-    preferred_property_types: list[str] | None = None
-
-
-class BuyerProfileResponse(BaseModel):
-    """Buyer profile in responses."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    budget_min: float | None
-    budget_max: float | None
-    preferred_locations: list[PreferredLocationItem] | None
-    rooms_min: int | None
-    bathrooms_min: int | None
-    area_min: float | None
-    area_max: float | None
-    preferred_features: dict | None
-    preferred_property_types: list[str] | None
-    created_at: datetime
-    updated_at: datetime
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -89,6 +54,45 @@ async def _get_buyer_profile_or_404(
             detail="Buyer profile not found. Create one first.",
         )
     return profile
+
+
+async def _get_seller_profile_or_404(
+    session: AsyncSession, user_id: uuid.UUID
+) -> SellerProfile:
+    """Load seller profile for a user or raise 404."""
+    result = await session.execute(
+        select(SellerProfile).where(SellerProfile.user_id == user_id)
+    )
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Seller profile not found.",
+        )
+    return profile
+
+
+async def _get_agent_profile_or_404(
+    session: AsyncSession, user_id: uuid.UUID
+) -> AgentProfile:
+    """Load agent profile for a user or raise 404."""
+    result = await session.execute(
+        select(AgentProfile).where(AgentProfile.user_id == user_id)
+    )
+    profile = result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent profile not found.",
+        )
+    return profile
+
+
+def _get_user_role(user: User) -> str | None:
+    """Return the first role name for the user, or None."""
+    if not user.roles:
+        return None
+    return user.roles[0].name
 
 
 def _trigger_match_recompute_on_preference_change(
@@ -133,16 +137,33 @@ def _trigger_match_recompute_on_preference_change(
 
 @router.get(
     "/me",
-    response_model=BuyerProfileResponse,
     responses={401: {"description": "Not authenticated"}},
 )
-async def get_my_buyer_profile(
+async def get_my_profile(
     user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
-) -> BuyerProfileResponse:
-    """Get the current user's buyer profile."""
-    profile = await _get_buyer_profile_or_404(session, user.id)
-    return BuyerProfileResponse.model_validate(profile)
+):
+    """Get the current user's profile based on their role.
+
+    Returns BuyerProfileResponse, SellerProfileResponse, or AgentProfileResponse
+    depending on the user's primary role.
+    """
+    role = _get_user_role(user)
+
+    if role == "buyer":
+        profile = await _get_buyer_profile_or_404(session, user.id)
+        return BuyerProfileResponse.model_validate(profile)
+    elif role == "seller":
+        profile = await _get_seller_profile_or_404(session, user.id)
+        return SellerProfileResponse.model_validate(profile)
+    elif role == "agent":
+        profile = await _get_agent_profile_or_404(session, user.id)
+        return AgentProfileResponse.model_validate(profile)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No profile available for your role",
+        )
 
 
 # ── PUT /api/v1/profiles/me ───────────────────────────────────────────────────
@@ -150,33 +171,98 @@ async def get_my_buyer_profile(
 
 @router.put(
     "/me",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "No profile for your role"},
+    },
+)
+async def update_my_profile(
+    data: BuyerProfileUpdate | SellerProfileUpdate | AgentProfileUpdate,
+    user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Update the current user's profile based on their role.
+
+    Accepts BuyerProfileUpdate, SellerProfileUpdate, or AgentProfileUpdate
+    depending on the user's primary role.
+    """
+    role = _get_user_role(user)
+
+    if role == "buyer":
+        profile = await _get_buyer_profile_or_404(session, user.id)
+        update_data = data.model_dump(exclude_unset=True)
+        if "preferred_locations" in update_data and update_data["preferred_locations"] is not None:
+            update_data["preferred_locations"] = [loc.model_dump() for loc in update_data["preferred_locations"]]
+        if "preferred_features" in update_data and update_data["preferred_features"] is not None:
+            update_data["preferred_features"] = {"features": update_data["preferred_features"]}
+        for field, value in update_data.items():
+            setattr(profile, field, value)
+        profile.updated_at = datetime.now(timezone.utc)
+        await session.flush()
+        await session.refresh(profile)
+        _trigger_match_recompute_on_preference_change(session, user.id)
+        log.info("buyer_profile_updated", user_id=str(user.id))
+        return BuyerProfileResponse.model_validate(profile)
+
+    elif role == "seller":
+        profile = await _get_seller_profile_or_404(session, user.id)
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(profile, field, value)
+        profile.updated_at = datetime.now(timezone.utc)
+        await session.flush()
+        await session.refresh(profile)
+        log.info("seller_profile_updated", user_id=str(user.id))
+        return SellerProfileResponse.model_validate(profile)
+
+    elif role == "agent":
+        profile = await _get_agent_profile_or_404(session, user.id)
+        update_data = data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(profile, field, value)
+        profile.updated_at = datetime.now(timezone.utc)
+        await session.flush()
+        await session.refresh(profile)
+        log.info("agent_profile_updated", user_id=str(user.id))
+        return AgentProfileResponse.model_validate(profile)
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No profile available for your role",
+        )
+
+
+# ── PATCH /api/v1/profiles/buyer ───────────────────────────────────────────────
+
+
+@router.patch(
+    "/buyer",
     response_model=BuyerProfileResponse,
     responses={
         401: {"description": "Not authenticated"},
         404: {"description": "Buyer profile not found"},
     },
 )
-async def update_my_buyer_profile(
+async def patch_my_buyer_preferences(
     data: BuyerProfileUpdate,
     user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_db),
 ) -> BuyerProfileResponse:
-    """Update the current user's buyer profile preferences.
+    """Update buyer preferences only (PATCH semantics — partial update).
 
-    Changes to preferences trigger async match cache invalidation
-    and recompute (see _trigger_match_recompute_on_preference_change).
+    This endpoint specifically targets buyer preferences and triggers
+    match cache invalidation when preferences change.
     """
     profile = await _get_buyer_profile_or_404(session, user.id)
 
     update_data = data.model_dump(exclude_unset=True)
 
-    # Handle preferred_locations JSONB conversion
     if "preferred_locations" in update_data and update_data["preferred_locations"] is not None:
         update_data["preferred_locations"] = [
             loc.model_dump() for loc in update_data["preferred_locations"]
         ]
 
-    # Handle preferred_features JSONB conversion
     if "preferred_features" in update_data and update_data["preferred_features"] is not None:
         update_data["preferred_features"] = {"features": update_data["preferred_features"]}
 
@@ -187,10 +273,9 @@ async def update_my_buyer_profile(
     await session.flush()
     await session.refresh(profile)
 
-    # ── Trigger match recompute ─────────────────────────────────────────────
     _trigger_match_recompute_on_preference_change(session, user.id)
 
-    log.info("buyer_profile_updated", user_id=str(user.id))
+    log.info("buyer_preferences_patched", user_id=str(user.id))
     return BuyerProfileResponse.model_validate(profile)
 
 

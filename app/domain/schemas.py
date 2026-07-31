@@ -301,3 +301,146 @@ class PaginatedPropertiesResponse(BaseModel):
     limit: int
     total_pages: int
 
+
+# ── Profile schemas ────────────────────────────────────────────────────────────
+
+
+class PreferredLocationItem(BaseModel):
+    """Single preferred location with radius."""
+
+    lat: float
+    lon: float
+    radius_km: float = 5.0
+
+
+class BuyerProfileUpdate(BaseModel):
+    """PUT /api/v1/profiles/me request body."""
+
+    budget_min: float | None = None
+    budget_max: float | None = None
+    preferred_locations: list[PreferredLocationItem] | None = None
+    rooms_min: int | None = None
+    bathrooms_min: int | None = None
+    area_min: float | None = None
+    area_max: float | None = None
+    preferred_features: list[str] | None = None
+    preferred_property_types: list[str] | None = None
+
+
+class BuyerProfileResponse(BaseModel):
+    """Buyer profile in responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    budget_min: float | None
+    budget_max: float | None
+    preferred_locations: list[PreferredLocationItem] | None
+    rooms_min: int | None
+    bathrooms_min: int | None
+    area_min: float | None
+    area_max: float | None
+    preferred_features: dict | None
+    preferred_property_types: list[str] | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SellerProfileResponse(BaseModel):
+    """Seller profile in responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    phone: str | None
+    company_name: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentProfileResponse(BaseModel):
+    """Agent profile in responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    license_number: str
+    agency_name: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SellerProfileUpdate(BaseModel):
+    """PUT /api/v1/profiles/me for seller."""
+
+    phone: str | None = None
+    company_name: str | None = None
+
+
+class AgentProfileUpdate(BaseModel):
+    """PUT /api/v1/profiles/me for agent."""
+
+    license_number: str | None = None
+    agency_name: str | None = None
+
+
+# ── Inquiry schemas ─────────────────────────────────────────────────────────────
+
+
+class InquiryCreate(BaseModel):
+    """POST /api/v1/inquiries request body."""
+
+    property_id: uuid.UUID
+    message: Annotated[str, Field(min_length=1, max_length=2000)]
+    contact_preference: str = "email"
+
+
+class InquiryResponse(BaseModel):
+    """Single inquiry in responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    from_user_id: uuid.UUID
+    to_user_id: uuid.UUID
+    property_id: uuid.UUID
+    message: str
+    contact_preference: str
+    status: str
+    response_message: str | None
+    response_action: str | None
+    created_at: datetime
+
+
+class InquiryListResponse(BaseModel):
+    """GET /api/v1/inquiries response."""
+
+    inquiries: list[InquiryResponse]
+    total: int
+
+
+class InquiryAction(BaseModel):
+    """PATCH /api/v1/inquiries/{id} request body."""
+
+    action: str  # accept | decline | request_more_info
+    response_message: str | None = None
+
+
+# ── Favorite schemas ────────────────────────────────────────────────────────────
+
+
+class FavoriteResponse(BaseModel):
+    """Single favorite in responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    property_id: uuid.UUID
+    created_at: datetime
+
+
+class FavoriteCreate(BaseModel):
+    """POST /api/v1/favorites request body."""
+
+    property_id: uuid.UUID
+
