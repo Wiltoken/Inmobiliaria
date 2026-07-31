@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.properties import router as properties_router
 from app.api.v1.users import router as users_router
 
 # ── v1 API router ─────────────────────────────────────────────────────────────
@@ -21,3 +22,6 @@ api_router.include_router(users_router)
 
 # Admin: /api/v1/admin/users, /api/v1/admin/audit-logs, /api/v1/admin/compliance-report
 api_router.include_router(admin_router)
+
+# Properties: /api/v1/properties, /api/v1/properties/{id}, /api/v1/properties/{id}/photos, etc.
+api_router.include_router(properties_router)

@@ -180,3 +180,124 @@ class ComplianceReport(BaseModel):
     users_without_consent: int
     password_expired_count: int
 
+
+# ── Property schemas ────────────────────────────────────────────────────────────
+
+
+class PropertyPhotoResponse(BaseModel):
+    """Photo in property response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    url: str
+    order: int
+
+
+class PropertyCreate(BaseModel):
+    """POST /api/v1/properties request body."""
+
+    type: str
+    operation: str
+    price: float
+    area_m2: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    rooms: int | None = None
+    bathrooms: int | None = None
+    features: list[str] | None = None
+    title: str
+    description: str | None = None
+    project_id: uuid.UUID | None = None
+
+
+class PropertyUpdate(BaseModel):
+    """PUT /api/v1/properties/{id} request body — all optional."""
+
+    type: str | None = None
+    operation: str | None = None
+    price: float | None = None
+    area_m2: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    rooms: int | None = None
+    bathrooms: int | None = None
+    features: list[str] | None = None
+    title: str | None = None
+    description: str | None = None
+    project_id: uuid.UUID | None = None
+
+
+class PropertySearch(BaseModel):
+    """GET /api/v1/properties query parameters for search."""
+
+    type: str | None = None
+    operation: str | None = None
+    price_min: float | None = None
+    price_max: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    radius_km: float | None = None
+    rooms_min: int | None = None
+    bathrooms_min: int | None = None
+    area_min: float | None = None
+    area_max: float | None = None
+    query: str | None = None
+    page: int = 1
+    limit: int = 20
+
+
+class PropertyResponse(BaseModel):
+    """Property in list/detail responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    type: str
+    operation: str
+    status: str
+    price: float
+    area_m2: float | None
+    lat: float | None
+    lon: float | None
+    rooms: int | None
+    bathrooms: int | None
+    features: dict | None
+    title: str
+    description: str | None
+    is_active: bool
+    owner_id: uuid.UUID | None
+    agent_id: uuid.UUID | None
+    project_id: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+    published_at: datetime | None
+    distance: float | None = None
+    photos: list[PropertyPhotoResponse] = []
+
+
+class PropertyStatusUpdate(BaseModel):
+    """PATCH /api/v1/properties/{id}/status request body."""
+
+    status: str
+
+
+class PhotoUploadResponse(BaseModel):
+    """Response after uploading a photo."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    url: str
+    order: int
+
+
+class PaginatedPropertiesResponse(BaseModel):
+    """GET /api/v1/properties paginated response."""
+
+    properties: list[PropertyResponse]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
