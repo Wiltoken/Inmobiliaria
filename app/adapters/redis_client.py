@@ -55,6 +55,7 @@ BLACKLIST_PREFIX = "blacklist"
 RATE_LIMIT_PREFIX = "rate_limit"
 REFRESH_PREFIX = "refresh"
 LAST_ACTIVE_PREFIX = "last_active"
+MATCH_PREFIX = "match"
 
 
 def blacklist_key(jti: str) -> str:
@@ -201,3 +202,54 @@ async def revoke_all_user_refresh_tokens(user_id: str) -> int:
 async def is_refresh_token_valid(user_id: str, jti: str) -> bool:
     """Return True if the refresh token exists in Redis (not revoked)."""
     return await redis_exists(refresh_key(user_id, jti))
+
+
+# --------------------------------------------------------------------------- #
+# Match result cache
+# --------------------------------------------------------------------------- #
+
+def match_cache_key(buyer_id: str | uuid.UUID) -> str:
+    """Redis key for cached buyer match results."""
+    return f"{MATCH_PREFIX}:{buyer_id}"
+
+
+async def cache_matches(buyer_id: str | uuid.UUID, matches: list[dict], ttl_seconds: int | None = None) -> None:
+    """Cache a buyer's match results in Redis.
+
+    Args:
+        buyer_id: Buyer's user ID.
+        matches: List of match dicts (serializable to JSON).
+        ttl_seconds: TTL in seconds. Defaults to MATCH_CACHE_TTL_SECONDS from settings.
+    """
+    import json
+
+    if ttl_seconds is None:
+        from app.config import settings
+        ttl_seconds = getattr(settings, "match_cache_ttl_seconds", 3600)
+
+    key = match_cache_key(buyer_id)
+    value = json.dumps(matches, default=str)
+    await redis_setex(key, value, ttl_seconds)
+
+
+async def get_cached_matches(buyer_id: str | uuid.UUID) -> list[dict] | None:
+    """Get cached match results from Redis.
+
+    Returns None if cache miss or parse error.
+    """
+    import json
+
+    key = match_cache_key(buyer_id)
+    value = await redis_get(key)
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+async def invalidate_match_cache(buyer_id: str | uuid.UUID) -> None:
+    """Delete cached matches for a buyer."""
+    key = match_cache_key(buyer_id)
+    await redis_delete(key)

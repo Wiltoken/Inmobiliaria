@@ -88,6 +88,13 @@ class AuthSettings(BaseSettings):
     app_env: str = Field(default="development", description="Runtime environment.")
     log_level: str = Field(default="INFO", description="Logging level.")
 
+    # ── Matching ──────────────────────────────────────────────────────────────
+    match_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=1,
+        description="TTL for cached match results in Redis (seconds).",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def secret_key_not_empty(cls, v: str) -> str:

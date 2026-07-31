@@ -6,7 +6,9 @@ from fastapi import APIRouter
 
 from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.matches import router as matches_router
 from app.api.v1.properties import router as properties_router
+from app.api.v1.profiles import router as profiles_router
 from app.api.v1.users import router as users_router
 
 # ── v1 API router ─────────────────────────────────────────────────────────────
@@ -25,3 +27,9 @@ api_router.include_router(admin_router)
 
 # Properties: /api/v1/properties, /api/v1/properties/{id}, /api/v1/properties/{id}/photos, etc.
 api_router.include_router(properties_router)
+
+# Matches: /api/v1/matches, /api/v1/matches/compute, /api/v1/matches/{match_id}
+api_router.include_router(matches_router)
+
+# Profiles: /api/v1/profiles/me (buyer profile CRUD + match trigger hook)
+api_router.include_router(profiles_router)

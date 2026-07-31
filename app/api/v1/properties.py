@@ -93,6 +93,45 @@ def _check_owner_or_agent(user: User, prop: Property) -> None:
         )
 
 
+def _trigger_match_cache_invalidation_on_publish(
+    session: AsyncSession, property_id: uuid.UUID
+) -> None:
+    """Invalidate match caches for all buyers when a property is published.
+
+    NOTE: This invalidates ALL buyer caches because a new published property
+    could match any buyer. In production, this should be a background task
+    (e.g., Celery task, Redis stream, or async queue) to avoid blocking the response.
+
+    TODO ( Slice 5 ): Replace with a proper background job / message queue
+    so this runs async and doesn't block the property publish response.
+    """
+    import asyncio
+
+    log.info("match_cache_invalidation_triggered", reason="property_published", property_id=str(property_id))
+
+    async def _invalidate():
+        try:
+            from app.adapters.redis_client import invalidate_match_cache
+            from app.domain.models import BuyerProfile
+            from sqlalchemy import select
+
+            result = await session.execute(select(BuyerProfile.id))
+            buyer_ids = result.scalars().all()
+            for buyer_id in buyer_ids:
+                await invalidate_match_cache(buyer_id)
+            log.info("match_cache_invalidated", buyer_count=len(buyer_ids))
+        except Exception as exc:
+            log.warning("match_cache_invalidation_failed", error=str(exc))
+
+    # Run fire-and-forget (non-blocking)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_invalidate())
+    except RuntimeError:
+        # No running loop (tests, startup)
+        pass
+
+
 def _build_property_response(prop: Property, distance: float | None = None) -> PropertyResponse:
     """Map ORM Property to PropertyResponse."""
     lat, lon = _extract_lat_lon(prop)
@@ -453,6 +492,12 @@ async def update_property_status(
     prop.status = new_status.value
     await session.flush()
     await session.refresh(prop)
+
+    # ── Match cache invalidation trigger ─────────────────────────────────────
+    # When a property is published (ACTIVE), all buyer matches may be affected.
+    # Invalidate all buyer caches (fire-and-forget background task in production).
+    if new_status == PropertyStatus.ACTIVE:
+        _trigger_match_cache_invalidation_on_publish(session, prop.id)
 
     log.info(
         "property_status_updated",
