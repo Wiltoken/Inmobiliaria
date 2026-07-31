@@ -196,3 +196,20 @@ def mock_redis(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     monkeypatch.setattr(redis_module, "get_redis_client", lambda: fake, raising=False)
     yield
     # Cleanup is handled by fakeredis automatically
+
+
+# --------------------------------------------------------------------------- #
+# E2E test placeholder
+# --------------------------------------------------------------------------- #
+# NOTE: E2E tests (tests/e2e/) require a running PostgreSQL + PostGIS instance.
+# They are skipped in CI/local environments that don't have the database
+# available. To run E2E tests:
+#   1. Start the full docker stack: docker-compose -f docker-compose.yml up -d
+#   2. Run: pytest tests/e2e/ -v
+#
+# Current E2E test files:
+#   - tests/e2e/test_auth_flow.py
+#   - tests/e2e/test_lockout.py
+#
+# To add a new E2E test, ensure the docker stack is running and the test
+# uses the real database (not SQLite).

@@ -1,10 +1,13 @@
-"""Admin endpoints: user management, audit log queries, and compliance reports.
+"""Admin endpoints: user management, audit log queries, compliance reports, and property moderation.
 
 All endpoints require admin or super_admin role.
 
-GET /api/v1/admin/users
-GET /api/v1/admin/audit-logs
-GET /api/v1/admin/compliance-report
+GET  /api/v1/admin/users
+GET  /api/v1/admin/audit-logs
+GET  /api/v1/admin/compliance-report
+GET  /api/v1/admin/users  (extended with role filter)
+PATCH /api/v1/admin/properties/{id}/approve
+PATCH /api/v1/admin/properties/{id}/reject
 """
 
 from __future__ import annotations
@@ -14,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,13 +26,14 @@ from app.adapters.redis_client import revoke_all_user_refresh_tokens
 from app.api.v1.deps import get_db, require_role
 from app.config import settings
 from app.core.security import hash_password
-from app.domain.models import AuditLog, LoginAttempt, PasswordReset, User
+from app.domain.models import AuditLog, LoginAttempt, PasswordReset, Property, PropertyStatus, Role, User
 from app.domain.schemas import (
     AuditLogEntry,
     ComplianceReport,
     ErrorResponse,
     PaginatedAuditLogsResponse,
     PaginatedUsersResponse,
+    PropertyResponse,
     UserProfile,
 )
 
@@ -72,17 +77,24 @@ async def list_users(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     tenant_id: uuid.UUID | None = None,
+    role: str | None = None,
     user: User = Depends(require_role("admin", "super_admin")),  # noqa: ARG001 — enforces role
     session: AsyncSession = Depends(get_db),
 ) -> PaginatedUsersResponse:
-    """List users with pagination and optional tenant filter.
+    """List users with pagination, optional tenant filter, and optional role filter.
 
     Requires admin or super_admin role.
     """
-    # Build base query
-    query = select(User)
+    # Build base query — join User → Role via secondary
+    from sqlalchemy.orm import selectinload
+
+    query = select(User).options(selectinload(User.roles))
     if tenant_id is not None:
         query = query.where(User.tenant_id == tenant_id)
+
+    # Filter by role name if provided
+    if role is not None:
+        query = query.join(User.roles).where(User.roles.any(Role.name == role))
 
     query = query.order_by(User.created_at.desc())
 
@@ -110,7 +122,7 @@ async def list_users(
             tenant_id=user.tenant_id,
             action="admin_list_users",
             ip_address=request.client.host if request.client else None,
-            details={"page": page, "page_size": page_size, "tenant_id": str(tenant_id) if tenant_id else None},
+            details={"page": page, "page_size": page_size, "tenant_id": str(tenant_id) if tenant_id else None, "role": role},
         )
         session.add(admin_entry)
         await session.commit()
@@ -295,4 +307,169 @@ async def compliance_report(
         failed_logins_today=failed_logins_today,
         users_without_consent=users_without_consent,
         password_expired_count=password_expired_count,
+    )
+
+
+# ── PATCH /api/v1/admin/properties/{id}/approve ─────────────────────────────────
+
+
+@router.patch(
+    "/properties/{property_id}/approve",
+    response_model=PropertyResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": ErrorResponse, "description": "Property not found"},
+    },
+)
+async def approve_property(
+    request: Request,
+    property_id: uuid.UUID,
+    user: User = Depends(require_role("admin", "super_admin")),  # noqa: ARG001 — enforces role
+    session: AsyncSession = Depends(get_db),
+) -> PropertyResponse:
+    """Admin approves a property listing and sets published_at.
+
+    Requires admin or super_admin role. Clears any prior rejection reason.
+    """
+    result = await session.execute(
+        select(Property).where(Property.id == property_id)
+    )
+    prop = result.scalar_one_or_none()
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found",
+        )
+
+    prop.status = PropertyStatus.ACTIVE.value
+    prop.published_at = datetime.now(timezone.utc)
+    prop.rejection_reason = None
+    await session.flush()
+    await session.refresh(prop)
+
+    # Audit log
+    try:
+        admin_entry = AuditLog(
+            user_id=user.id,
+            tenant_id=user.tenant_id,
+            action="admin_property_approve",
+            ip_address=request.client.host if request.client else None,
+            details={"property_id": str(property_id), "title": prop.title},
+        )
+        session.add(admin_entry)
+        await session.commit()
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_property_approve", error=str(exc))
+
+    log.info("property_approved_by_admin", property_id=str(property_id), admin_id=str(user.id))
+    return _build_admin_property_response(prop)
+
+
+# ── PATCH /api/v1/admin/properties/{id}/reject ──────────────────────────────────
+
+
+class PropertyRejectRequest(BaseModel):
+    """PATCH /api/v1/admin/properties/{id}/reject request body."""
+
+    reason: Annotated[str, Field(min_length=1, max_length=1000)]
+
+
+class PropertyRejectResponse(BaseModel):
+    """PATCH /api/v1/admin/properties/{id}/reject response."""
+
+    id: uuid.UUID
+    status: str
+    rejection_reason: str
+
+
+@router.patch(
+    "/properties/{property_id}/reject",
+    response_model=PropertyRejectResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": ErrorResponse, "description": "Property not found"},
+    },
+)
+async def reject_property(
+    request: Request,
+    property_id: uuid.UUID,
+    data: PropertyRejectRequest,
+    user: User = Depends(require_role("admin", "super_admin")),  # noqa: ARG001 — enforces role
+    session: AsyncSession = Depends(get_db),
+) -> PropertyRejectResponse:
+    """Admin rejects a property listing with a reason and reverts it to draft.
+
+    Sets rejection_reason on the property and reverts status to pending (draft-like).
+    Requires admin or super_admin role.
+    """
+    result = await session.execute(
+        select(Property).where(Property.id == property_id)
+    )
+    prop = result.scalar_one_or_none()
+    if not prop:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Property not found",
+        )
+
+    prop.status = PropertyStatus.PENDING.value
+    prop.rejection_reason = data.reason
+    await session.flush()
+    await session.refresh(prop)
+
+    # Audit log
+    try:
+        admin_entry = AuditLog(
+            user_id=user.id,
+            tenant_id=user.tenant_id,
+            action="admin_property_reject",
+            ip_address=request.client.host if request.client else None,
+            details={"property_id": str(property_id), "title": prop.title, "reason": data.reason},
+        )
+        session.add(admin_entry)
+        await session.commit()
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_property_reject", error=str(exc))
+
+    log.info("property_rejected_by_admin", property_id=str(property_id), admin_id=str(user.id), reason=data.reason)
+    return PropertyRejectResponse(id=prop.id, status=prop.status, rejection_reason=prop.rejection_reason)
+
+
+# ── Internal helpers ───────────────────────────────────────────────────────────
+
+
+def _build_admin_property_response(prop: Property) -> PropertyResponse:
+    """Map ORM Property to PropertyResponse for admin endpoints."""
+    loc = prop.location
+    if loc and loc.get("type") == "Point":
+        coords = loc.get("coordinates", [])
+        lon = coords[0] if len(coords) > 0 else None
+        lat = coords[1] if len(coords) > 1 else None
+    else:
+        lat, lon = None, None
+
+    return PropertyResponse(
+        id=prop.id,
+        type=prop.type,
+        operation=prop.operation,
+        status=prop.status,
+        price=prop.price,
+        area_m2=prop.area_m2,
+        lat=lat,
+        lon=lon,
+        rooms=prop.rooms,
+        bathrooms=prop.bathrooms,
+        features=prop.features,
+        title=prop.title,
+        description=prop.description,
+        is_active=prop.is_active,
+        owner_id=prop.owner_id,
+        agent_id=prop.agent_id,
+        project_id=prop.project_id,
+        created_at=prop.created_at,
+        updated_at=prop.updated_at,
+        published_at=prop.published_at,
+        photos=[],
     )
