@@ -1,0 +1,10 @@
+# PgBouncer userlist.txt
+# Format: "username" "password_hash"
+# Password hashes generated with: python -c "import hashlib; print(hashlib.md5(b'password').hexdigest())"
+#
+# IMPORTANT: This is a placeholder. Generate real hashes from environment variables.
+# For production, generate with:
+#   python -c "import hashlib, getpass; print(f'\"inmuebles\" \"{hashlib.md5(getpass.getpass().encode()).hexdigest()}\"')"
+#
+# Placeholder entries (replace with real values from POSTGRES_PASSWORD env var)
+"inmuebles" "placeholder_hash_replace_in_production"
