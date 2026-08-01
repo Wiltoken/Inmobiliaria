@@ -53,7 +53,7 @@ make migrate
     └─────────┘
 ```
 
-Full architecture documentation: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+Full architecture documentation: [Documentación Inmobiliaria/ARCHITECTURE.md](Documentación%20Inmobiliaria/ARCHITECTURE.md)
 
 ## Tech Stack
 
@@ -80,13 +80,13 @@ Full architecture documentation: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](docs/ARCHITECTURE.md) | System design, domain model, ADRs |
-| [Infrastructure](docs/INFRASTRUCTURE.md) | Service details, scaling, networking |
-| [API Reference](docs/API.md) | All endpoints, request/response examples |
-| [Deployment](docs/DEPLOYMENT.md) | Production setup, SSL, migrations |
-| [Security](docs/SECURITY.md) | Auth flow, RBAC, rate limiting, OWASP |
-| [Development](docs/DEVELOPMENT.md) | Local setup, testing, code style |
-| [Operations](docs/OPERATIONS.md) | Runbooks, monitoring, backups |
+| [Architecture](Documentación%20Inmobiliaria/ARCHITECTURE.md) | System design, domain model, ADRs |
+| [Infrastructure](Documentación%20Inmobiliaria/INFRASTRUCTURE.md) | Service details, scaling, networking |
+| [API Reference](Documentación%20Inmobiliaria/API.md) | All endpoints, request/response examples |
+| [Deployment](Documentación%20Inmobiliaria/DEPLOYMENT.md) | Production setup, SSL, migrations |
+| [Security](Documentación%20Inmobiliaria/SECURITY.md) | Auth flow, RBAC, rate limiting, OWASP |
+| [Development](Documentación%20Inmobiliaria/DEVELOPMENT.md) | Local setup, testing, code style |
+| [Operations](Documentación%20Inmobiliaria/OPERATIONS.md) | Runbooks, monitoring, backups |
 
 ## Commands
 
@@ -132,7 +132,7 @@ app/
 ├── ports/            # Interface definitions
 └── adapters/         # Database, Redis, S3 implementations
 
-docs/                 # Architecture, deployment, API docs
+Documentación Inmobiliaria/  # Documentación completa
 scripts/              # Backup, restore scripts
 nginx/                # Nginx configuration
 pgbouncer/            # Connection pooler config

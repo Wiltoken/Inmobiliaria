@@ -12,7 +12,7 @@
 | [SECURITY.md](SECURITY.md) | Flujo JWT, matriz RBAC, rate limiting, OWASP, Ley 1581 | Security, Compliance |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Setup local, tests, code style, arquitectura hexagonal | Desarrolladores |
 | [OPERATIONS.md](OPERATIONS.md) | Runbooks diarios/semanales/mensuales, backups, restore, monitoreo | Operadores |
-| [CHANGELOG.md](../CHANGELOG.md) | Historial de versiones y cambios | Todos |
+| [CHANGELOG.md](CHANGELOG.md) | Historial de versiones y cambios | Todos |
 
 ## Guía rápida por perfil
 
