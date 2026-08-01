@@ -89,7 +89,7 @@ class ResponseAction(str, PyEnum):
     NO_ACTION = "no_action"
 
 
-# ── Auth Models (from auth-login-platform) ──────────────────────────────────
+# ── Auth & User Models ─────────────────────────────────────────────────────
 
 
 class User(Base):
