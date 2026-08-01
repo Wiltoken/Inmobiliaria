@@ -13,6 +13,7 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev          Start development environment (hot reload)"
+	@echo "  make seed         Populate database with test data"
 	@echo "  make test         Run all tests"
 	@echo "  make lint         Run linting checks"
 	@echo "  make migrate      Run database migrations"
@@ -114,6 +115,13 @@ lint-check:
 
 format:
 	python -m ruff format app/
+
+# ── Seed Data ──────────────────────────────────────────────────────────────────
+
+seed:
+	@echo "🌱 Populating database with test data..."
+	python scripts/seed.py
+	@echo "✅ Seed complete. Credenciales en scripts/seed.py"
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 
