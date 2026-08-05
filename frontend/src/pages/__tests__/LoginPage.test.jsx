@@ -87,9 +87,4 @@ describe('LoginPage', () => {
     const errors = screen.getAllByText('El usuario es requerido');
     expect(errors.length).toBeGreaterThanOrEqual(1);
   });
-
-  it('renders demo credentials card', () => {
-    renderLogin();
-    expect(screen.getByText('Demo:')).toBeInTheDocument();
-  });
 });

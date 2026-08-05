@@ -176,14 +176,6 @@ export default function LoginPage() {
             Regístrate aquí
           </Link>
         </p>
-
-        {/* Demo Credentials */}
-        <Card className="mt-4 p-4 bg-gray-50 border-dashed">
-          <p className="text-sm text-gray-500 text-center">
-            <strong>Demo:</strong> usuario: <code className="bg-gray-200 px-1 rounded">demo</code> /
-            contraseña: <code className="bg-gray-200 px-1 rounded">demo123</code>
-          </p>
-        </Card>
       </div>
     </div>
   );
