@@ -18,7 +18,7 @@ export default function Navbar({ className = '' }) {
   return (
     <header className={`bg-white border-b border-gray-200 sticky top-0 z-50 ${className}`}>
       <div className="px-4 lg:px-6">
-        <div className="flex items-center justify-between h-16">
+        <nav role="navigation" aria-label="Principal" className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-2">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
@@ -34,6 +34,7 @@ export default function Navbar({ className = '' }) {
               <input
                 type="search"
                 placeholder="Buscar propiedades..."
+                aria-label="Búsqueda de propiedades"
                 className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-50
                          focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white"
               />
@@ -56,6 +57,8 @@ export default function Navbar({ className = '' }) {
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                aria-expanded={showUserMenu}
+                aria-haspopup="true"
               >
                 <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                   <span className="text-white font-medium text-sm">
@@ -123,7 +126,7 @@ export default function Navbar({ className = '' }) {
               )}
             </div>
           </div>
-        </div>
+        </nav>
       </div>
     </header>
   );

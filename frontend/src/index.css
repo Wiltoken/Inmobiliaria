@@ -3,8 +3,8 @@
 @theme {
   --color-primary: #1F3864;
   --color-primary-light: #2B579A;
-  --color-accent: #E8A838;
-  --color-success: #16A34A;
+  --color-accent: #B8860B;
+  --color-success: #15803D;
   --color-error: #DC2626;
   --color-warning: #F59E0B;
   
@@ -17,6 +17,11 @@
 }
 
 @layer base {
+  :focus-visible {
+    outline: 2px solid #1F3864;
+    outline-offset: 2px;
+  }
+
   html {
     font-family: var(--font-family-sans);
     -webkit-tap-highlight-color: transparent;

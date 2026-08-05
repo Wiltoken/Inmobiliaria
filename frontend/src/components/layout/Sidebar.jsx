@@ -63,7 +63,7 @@ export default function Sidebar({ className = '' }) {
       `}
     >
       {/* Menu Items */}
-      <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
+      <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide" aria-label="Navegación principal">
         <ul className="space-y-1 px-3">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -73,6 +73,7 @@ export default function Sidebar({ className = '' }) {
               <li key={item.path}>
                 <NavLink
                   to={item.path}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`
                     flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium
                     transition-all duration-200

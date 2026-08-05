@@ -155,6 +155,7 @@ export default function PropertyFilters({
             <Input
               type="number"
               placeholder="Mínimo"
+              aria-label="Precio mínimo"
               value={filters.price_min}
               onChange={(e) => handleChange('price_min', e.target.value)}
               className="flex-1"
@@ -163,6 +164,7 @@ export default function PropertyFilters({
             <Input
               type="number"
               placeholder="Máximo"
+              aria-label="Precio máximo"
               value={filters.price_max}
               onChange={(e) => handleChange('price_max', e.target.value)}
               className="flex-1"
@@ -211,6 +213,7 @@ export default function PropertyFilters({
             <Input
               type="number"
               placeholder="Mín"
+              aria-label="Área mínima"
               value={filters.area_min}
               onChange={(e) => handleChange('area_min', e.target.value)}
               className="flex-1"
@@ -219,6 +222,7 @@ export default function PropertyFilters({
             <Input
               type="number"
               placeholder="Máx"
+              aria-label="Área máxima"
               value={filters.area_max}
               onChange={(e) => handleChange('area_max', e.target.value)}
               className="flex-1"
