@@ -22,7 +22,7 @@ from app.adapters.redis_client import (
     store_refresh_token,
     touch_last_active,
 )
-from app.api.v1.deps import check_session_active, get_db, get_tenant_id
+from app.api.v1.deps import get_db
 from app.config import settings
 from app.core.exceptions import (
     AccountLockedError,
@@ -33,7 +33,6 @@ from app.core.exceptions import (
     TokenExpiredError,
     TokenRevokedError,
 )
-from app.ports.captcha import CaptchaVerificationError
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -55,6 +54,7 @@ from app.domain.schemas import (
     ResetPasswordResponse,
     TokenResponse,
 )
+from app.ports.captcha import CaptchaVerificationError
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -383,7 +383,7 @@ async def refresh(
         roles=user_roles,
         jti=new_jti,
     )
-    new_refresh_token = create_refresh_token(
+    _new_refresh_token = create_refresh_token(
         user_id=user_id,
         tenant_id=tenant_id,
         jti=new_refresh_jti,

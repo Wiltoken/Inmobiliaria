@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -24,7 +23,6 @@ from sqlalchemy.orm import selectinload
 
 from app.adapters.s3_storage import get_s3_adapter
 from app.api.v1.deps import get_current_active_user, get_db
-from app.config import settings
 from app.domain.models import Property, PropertyPhoto, PropertyStatus, User
 from app.domain.schemas import (
     PaginatedPropertiesResponse,
@@ -111,9 +109,10 @@ def _trigger_match_cache_invalidation_on_publish(
 
     async def _invalidate():
         try:
+            from sqlalchemy import select
+
             from app.adapters.redis_client import invalidate_match_cache
             from app.domain.models import BuyerProfile
-            from sqlalchemy import select
 
             result = await session.execute(select(BuyerProfile.id))
             buyer_ids = result.scalars().all()
@@ -234,7 +233,7 @@ async def search_properties(
     """
     # Import here to avoid circular / missing adapter
     try:
-        from geoalchemy2.functions import ST_DWithin, ST_Distance, ST_MakePoint
+        from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_MakePoint
         from geoalchemy2.shape import to_shape
 
         has_geo = search.lat is not None and search.lon is not None

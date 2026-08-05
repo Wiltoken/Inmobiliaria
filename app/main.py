@@ -15,8 +15,8 @@ from app.config import settings
 from app.core.middleware import (
     AuditLogMiddleware,
     AuthMiddleware,
-    RBACMiddleware,
     RateLimitMiddleware,
+    RBACMiddleware,
 )
 from app.logging import configure_logging
 
@@ -48,8 +48,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     log.info("shutdown")
     try:
-        from app.adapters.redis_client import close_redis_client
         from app.adapters.database import close_engine
+        from app.adapters.redis_client import close_redis_client
         await close_redis_client()
         await close_engine()
     except Exception:

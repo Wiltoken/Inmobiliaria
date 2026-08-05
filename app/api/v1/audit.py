@@ -7,17 +7,12 @@ GET  /api/v1/admin/analytics     — Get BI dashboard data
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Annotated
-
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import get_db, get_current_user
+from app.api.v1.deps import get_current_user, get_db
 from app.domain.models import User, UserAction
-
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 

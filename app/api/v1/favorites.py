@@ -13,7 +13,6 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_current_active_user, get_db
 from app.domain.models import Favorite, Property, User

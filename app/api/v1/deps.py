@@ -7,7 +7,7 @@ entry point for DB session and auth context.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Callable
+from typing import Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -21,14 +21,9 @@ from app.adapters.redis_client import (
 from app.config import settings
 from app.core.exceptions import (
     InsufficientRoleError,
-    InvalidTokenError,
     SessionExpiredError,
-    TokenExpiredError,
-    TokenRevokedError,
 )
-from app.core.security import decode_token
 from app.domain.models import User
-
 
 # ── Database session ──────────────────────────────────────────────────────────
 

@@ -14,7 +14,7 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -153,7 +153,11 @@ async def list_matches(
                 prop = props_by_id.get(m.get("property_id"))
                 if prop:
                     from datetime import datetime
-                    computed_at = datetime.fromisoformat(m["computed_at"]) if isinstance(m.get("computed_at"), str) else m.get("computed_at")
+                    computed_at = (
+                        datetime.fromisoformat(m["computed_at"])
+                        if isinstance(m.get("computed_at"), str)
+                        else m.get("computed_at")
+                    )
                     matches.append(
                         MatchDetailResponse(
                             id=uuid.UUID(m["id"]) if isinstance(m["id"], str) else m["id"],

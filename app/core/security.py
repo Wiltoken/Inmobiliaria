@@ -17,7 +17,6 @@ from app.core.exceptions import (
     InvalidTokenError,
     PasswordPolicyError,
     TokenExpiredError,
-    TokenRevokedError,
 )
 
 # ── Password hashing ──────────────────────────────────────────────────────────

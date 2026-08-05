@@ -171,10 +171,9 @@ def cleanup_old_matches() -> dict:
     Returns:
         dict with cleanup status and count of deleted records.
     """
-    import uuid
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
 
-    from sqlalchemy import delete, text
+    from sqlalchemy import delete
     from sqlalchemy.ext.asyncio import create_async_engine
 
     database_url = os.getenv(

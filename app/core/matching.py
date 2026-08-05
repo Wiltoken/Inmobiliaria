@@ -14,19 +14,18 @@ from __future__ import annotations
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 import structlog
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.adapters.redis_client import cache_matches, get_cached_matches, invalidate_match_cache
-from app.config import settings
+from app.adapters.redis_client import (
+    cache_matches,
+    get_cached_matches,
+    invalidate_match_cache,
+)
 from app.domain.models import BuyerProfile, Match, Property, PropertyStatus
-
-if TYPE_CHECKING:
-    pass
 
 log = structlog.get_logger()
 

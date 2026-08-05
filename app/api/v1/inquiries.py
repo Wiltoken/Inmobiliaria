@@ -10,18 +10,28 @@ GET    /api/v1/inquiries/received     — seller/agent sees received inquiries
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_active_user, get_db
-from app.domain.models import Inquiry, InquiryStatus, Property, PropertyStatus, ResponseAction, User
-from app.domain.schemas import InquiryAction, InquiryCreate, InquiryListResponse, InquiryResponse
+from app.domain.models import (
+    Inquiry,
+    InquiryStatus,
+    Property,
+    PropertyStatus,
+    ResponseAction,
+    User,
+)
+from app.domain.schemas import (
+    InquiryAction,
+    InquiryCreate,
+    InquiryListResponse,
+    InquiryResponse,
+)
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/inquiries", tags=["inquiries"])

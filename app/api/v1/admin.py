@@ -17,16 +17,22 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.redis_client import revoke_all_user_refresh_tokens
 from app.api.v1.deps import get_db, require_role
 from app.config import settings
-from app.core.security import hash_password
-from app.domain.models import AuditLog, LoginAttempt, PasswordReset, Property, PropertyStatus, Role, User, UserAction
+from app.domain.models import (
+    AuditLog,
+    LoginAttempt,
+    Property,
+    PropertyStatus,
+    Role,
+    User,
+    UserAction,
+)
 from app.domain.schemas import (
     AuditLogEntry,
     ComplianceReport,

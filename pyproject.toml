@@ -33,6 +33,8 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "fakeredis>=2.26.0",
     "pytest-cov>=6.0.0",
+    "aiosqlite>=0.20.0",
+    "ruff>=0.8.0",
 ]
 
 [build-system]
@@ -41,6 +43,44 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 140
+exclude = ["tests/", "migrations/", "scripts/", ".venv/", "__pycache__/"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (unused imports, undefined names)
+    "I",    # isort (import order)
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # simplify
+    "TCH",  # type-checking imports
+    "PLE",  # pylint errors
+]
+ignore = [
+    "B008",   # Depends() in FastAPI function defaults — standard pattern
+    "BLE001", # Blind except — tech debt, fix incrementally
+    "S110",   # try-except-pass — standard middleware/auth pattern
+    "UP017",  # datetime.UTC alias — Python 3.13 style, non-critical
+    "UP035",  # collections.abc imports — non-critical
+    "UP043",  # Unnecessary default type args — style preference
+    "TC001",  # TYPE_CHECKING block with runtime import — pre-existing
+    "TC002",  # Move import into TYPE_CHECKING block — pre-existing
+    "TC003",  # Multiple imports on one line in TYPE_CHECKING — pre-existing
+    "PIE790", # Unnecessary pass — non-critical
+    "E712",   # Comparison to True/False — pre-existing style
+    "F841",   # Unused variable — pre-existing (side-effect calls, WIP)
+    "B904",   # raise without from — pre-existing
+    "UP042",  # Optional[X] -> X | None — style preference
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/core/celery_app.py" = ["PLW1510"]  # subprocess.run without check=True — explicit design choice
+"app/core/middleware.py" = ["SIM103"]   # Return condition directly — pre-existing style
+"app/main.py" = ["E402"]               # Module-level import after app creation — avoids circular imports
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

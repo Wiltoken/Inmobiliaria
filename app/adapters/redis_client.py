@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import redis.asyncio as redis
 from redis.asyncio import ConnectionPool, Redis
 
-from app.config import settings
-
 if TYPE_CHECKING:
-    pass
+    import uuid
+
+from app.config import settings
 
 _pool: ConnectionPool | None = None
 _client: Redis | None = None

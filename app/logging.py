@@ -8,8 +8,6 @@ Log format: ts=ISO8601 level=INFO/WARN/ERROR logger=name event=message key=value
 
 from __future__ import annotations
 
-import sys
-
 import structlog
 
 from app.config import settings

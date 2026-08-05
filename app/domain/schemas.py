@@ -11,7 +11,6 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ── Auth request/response schemas ────────────────────────────────────────────
 
 

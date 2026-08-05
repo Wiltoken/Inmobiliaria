@@ -5,9 +5,6 @@ GET /api/v1/users/me — current user profile
 
 from __future__ import annotations
 
-import uuid
-from typing import Annotated
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession

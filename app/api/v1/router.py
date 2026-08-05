@@ -11,8 +11,8 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.favorites import router as favorites_router
 from app.api.v1.inquiries import router as inquiries_router
 from app.api.v1.matches import router as matches_router
-from app.api.v1.properties import router as properties_router
 from app.api.v1.profiles import router as profiles_router
+from app.api.v1.properties import router as properties_router
 from app.api.v1.users import router as users_router
 
 # ── v1 API router ─────────────────────────────────────────────────────────────

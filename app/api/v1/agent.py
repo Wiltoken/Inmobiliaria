@@ -17,14 +17,13 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import and_, func, select
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.deps import get_current_active_user, get_db, require_role
+from app.api.v1.deps import get_db, require_role
 from app.domain.models import (
-    AgentProfile,
     BuyerProfile,
     Inquiry,
     InquiryStatus,

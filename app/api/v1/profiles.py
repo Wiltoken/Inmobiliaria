@@ -12,14 +12,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_current_active_user, get_db
 from app.domain.models import AgentProfile, BuyerProfile, SellerProfile, User
@@ -28,7 +25,6 @@ from app.domain.schemas import (
     AgentProfileUpdate,
     BuyerProfileResponse,
     BuyerProfileUpdate,
-    PreferredLocationItem,
     SellerProfileResponse,
     SellerProfileUpdate,
 )
