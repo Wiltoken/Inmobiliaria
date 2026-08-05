@@ -231,7 +231,10 @@ async def compute_all_matches(buyer_id: uuid.UUID, session: AsyncSession) -> lis
     """
     # Get buyer profile
     result = await session.execute(
-        select(BuyerProfile).where(BuyerProfile.user_id == buyer_id)
+        select(BuyerProfile).where(
+            BuyerProfile.user_id == buyer_id,
+            BuyerProfile.is_deleted == False,
+        )
     )
     buyer = result.scalar_one_or_none()
     if not buyer:
@@ -301,7 +304,10 @@ async def get_paginated_matches(
     """
     # Get buyer profile
     result = await session.execute(
-        select(BuyerProfile).where(BuyerProfile.user_id == buyer_id)
+        select(BuyerProfile).where(
+            BuyerProfile.user_id == buyer_id,
+            BuyerProfile.is_deleted == False,
+        )
     )
     buyer = result.scalar_one_or_none()
     if not buyer:

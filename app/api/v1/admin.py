@@ -13,7 +13,7 @@ PATCH /api/v1/admin/properties/{id}/reject
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Annotated
 
 import structlog
@@ -25,11 +25,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import get_db, require_role
 from app.config import settings
 from app.domain.models import (
+    AgentProfile,
     AuditLog,
+    BuyerProfile,
     LoginAttempt,
+    PasswordReset,
     Property,
     PropertyStatus,
+    RefreshToken,
     Role,
+    SellerProfile,
     User,
     UserAction,
 )
@@ -94,7 +99,7 @@ async def list_users(
     # Build base query — join User → Role via secondary
     from sqlalchemy.orm import selectinload
 
-    query = select(User).options(selectinload(User.roles))
+    query = select(User).options(selectinload(User.roles)).where(User.deleted_at.is_(None))
     if tenant_id is not None:
         query = query.where(User.tenant_id == tenant_id)
 
@@ -622,4 +627,184 @@ async def get_analytics(
         user_roles=user_roles,
         top_properties=top_properties,
         recent_actions=recent_actions,
+    )
+
+
+# ── POST /api/v1/admin/users/{user_id}/delete-data ────────────────────────────
+
+
+@router.post(
+    "/users/{user_id}/delete-data",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": ErrorResponse, "description": "User not found"},
+    },
+)
+async def admin_delete_user_data(
+    user_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> None:
+    """Soft-delete a user's data for Ley 1581 compliance.
+
+    Cascades to profiles, revokes tokens, anonymizes audit logs.
+    Requires admin or super_admin role.
+    """
+    result = await session.execute(
+        select(User).where(User.id == user_id)
+    )
+    target_user = result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    now = datetime.now(UTC)
+    target_user.deleted_at = now
+    target_user.deletion_reason = "admin_requested"
+    target_user.is_active = False
+
+    profiles_result = await session.execute(
+        select(BuyerProfile).where(BuyerProfile.user_id == user_id)
+    )
+    if buyer := profiles_result.scalar_one_or_none():
+        buyer.is_deleted = True
+
+    profiles_result = await session.execute(
+        select(SellerProfile).where(SellerProfile.user_id == user_id)
+    )
+    if seller := profiles_result.scalar_one_or_none():
+        seller.is_deleted = True
+
+    profiles_result = await session.execute(
+        select(AgentProfile).where(AgentProfile.user_id == user_id)
+    )
+    if agent := profiles_result.scalar_one_or_none():
+        agent.is_deleted = True
+
+    from sqlalchemy import update
+
+    await session.execute(
+        update(RefreshToken)
+        .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
+        .values(revoked_at=now)
+    )
+
+    await session.execute(
+        update(PasswordReset)
+        .where(PasswordReset.user_id == user_id, PasswordReset.used_at.is_(None))
+        .values(used_at=now)
+    )
+
+    await session.execute(
+        update(AuditLog)
+        .where(AuditLog.user_id == user_id)
+        .values(ip_address=None)
+    )
+
+    try:
+        admin_entry = AuditLog(
+            user_id=admin.id,
+            tenant_id=admin.tenant_id,
+            action="admin_delete_user_data",
+            ip_address=request.client.host if request.client else None,
+            details={"target_user_id": str(user_id)},
+        )
+        session.add(admin_entry)
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_delete_user_data", error=str(exc))
+
+    log.info("user_soft_deleted_by_admin", target_user_id=str(user_id), admin_id=str(admin.id))
+    await session.commit()
+
+
+# ── POST /api/v1/admin/users/{user_id}/restore ────────────────────────────────
+
+
+class UserRestoreResponse(BaseModel):
+    id: uuid.UUID
+    username: str
+    email: str
+    is_active: bool
+    deleted_at: datetime | None
+    deletion_reason: str | None
+
+
+@router.post(
+    "/users/{user_id}/restore",
+    response_model=UserRestoreResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": ErrorResponse, "description": "User not found"},
+    },
+)
+async def admin_restore_user(
+    user_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> UserRestoreResponse:
+    """Restore a soft-deleted user and their profiles.
+
+    Requires admin or super_admin role.
+    """
+    result = await session.execute(
+        select(User).where(User.id == user_id)
+    )
+    target_user = result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    target_user.deleted_at = None
+    target_user.deletion_reason = None
+    target_user.is_active = True
+
+    profiles_result = await session.execute(
+        select(BuyerProfile).where(BuyerProfile.user_id == user_id)
+    )
+    if buyer := profiles_result.scalar_one_or_none():
+        buyer.is_deleted = False
+
+    profiles_result = await session.execute(
+        select(SellerProfile).where(SellerProfile.user_id == user_id)
+    )
+    if seller := profiles_result.scalar_one_or_none():
+        seller.is_deleted = False
+
+    profiles_result = await session.execute(
+        select(AgentProfile).where(AgentProfile.user_id == user_id)
+    )
+    if agent := profiles_result.scalar_one_or_none():
+        agent.is_deleted = False
+
+    try:
+        admin_entry = AuditLog(
+            user_id=admin.id,
+            tenant_id=admin.tenant_id,
+            action="admin_restore_user",
+            ip_address=request.client.host if request.client else None,
+            details={"target_user_id": str(user_id)},
+        )
+        session.add(admin_entry)
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_restore_user", error=str(exc))
+
+    log.info("user_restored_by_admin", target_user_id=str(user_id), admin_id=str(admin.id))
+    await session.commit()
+
+    return UserRestoreResponse(
+        id=target_user.id,
+        username=target_user.username,
+        email=target_user.email,
+        is_active=target_user.is_active,
+        deleted_at=target_user.deleted_at,
+        deletion_reason=target_user.deletion_reason,
     )

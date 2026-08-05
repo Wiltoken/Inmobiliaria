@@ -41,7 +41,10 @@ async def _get_buyer_profile_or_404(
 ) -> BuyerProfile:
     """Load buyer profile for a user or raise 404."""
     result = await session.execute(
-        select(BuyerProfile).where(BuyerProfile.user_id == user_id)
+        select(BuyerProfile).where(
+            BuyerProfile.user_id == user_id,
+            BuyerProfile.is_deleted == False,
+        )
     )
     profile = result.scalar_one_or_none()
     if not profile:
@@ -57,7 +60,10 @@ async def _get_seller_profile_or_404(
 ) -> SellerProfile:
     """Load seller profile for a user or raise 404."""
     result = await session.execute(
-        select(SellerProfile).where(SellerProfile.user_id == user_id)
+        select(SellerProfile).where(
+            SellerProfile.user_id == user_id,
+            SellerProfile.is_deleted == False,
+        )
     )
     profile = result.scalar_one_or_none()
     if not profile:
@@ -73,7 +79,10 @@ async def _get_agent_profile_or_404(
 ) -> AgentProfile:
     """Load agent profile for a user or raise 404."""
     result = await session.execute(
-        select(AgentProfile).where(AgentProfile.user_id == user_id)
+        select(AgentProfile).where(
+            AgentProfile.user_id == user_id,
+            AgentProfile.is_deleted == False,
+        )
     )
     profile = result.scalar_one_or_none()
     if not profile:
@@ -295,7 +304,10 @@ async def create_my_buyer_profile(
     """
     # Check if profile already exists
     result = await session.execute(
-        select(BuyerProfile).where(BuyerProfile.user_id == user.id)
+        select(BuyerProfile).where(
+            BuyerProfile.user_id == user.id,
+            BuyerProfile.is_deleted == False,
+        )
     )
     existing = result.scalar_one_or_none()
     if existing:
