@@ -42,45 +42,44 @@
   }
 }
 
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200;
-    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
-    @apply disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  
-  .btn-primary {
-    @apply btn bg-primary text-white hover:bg-primary-light;
-    @apply focus:ring-primary;
-  }
-  
-  .btn-secondary {
-    @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200;
-    @apply focus:ring-gray-400;
-  }
-  
-  .btn-accent {
-    @apply btn bg-accent text-white hover:bg-amber-500;
-    @apply focus:ring-accent;
-  }
-  
-  .btn-outline {
-    @apply btn border-2 border-primary text-primary hover:bg-primary hover:text-white;
-    @apply focus:ring-primary;
-  }
-  
-  .btn-ghost {
-    @apply btn bg-transparent text-gray-600 hover:bg-gray-100;
-    @apply focus:ring-gray-400;
-  }
-  
-  .btn-sm {
-    @apply px-3 py-1.5 text-sm;
-  }
-  
-  .btn-lg {
-    @apply px-6 py-3 text-lg;
-  }
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply btn bg-primary text-white hover:bg-primary-light;
+  @apply focus:ring-primary;
+}
+
+.btn-secondary {
+  @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200;
+  @apply focus:ring-gray-400;
+}
+
+.btn-accent {
+  @apply btn bg-accent text-white hover:bg-amber-500;
+  @apply focus:ring-accent;
+}
+
+.btn-outline {
+  @apply btn border-2 border-primary text-primary hover:bg-primary hover:text-white;
+  @apply focus:ring-primary;
+}
+
+.btn-ghost {
+  @apply btn bg-transparent text-gray-600 hover:bg-gray-100;
+  @apply focus:ring-gray-400;
+}
+
+.btn-sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.btn-lg {
+  @apply px-6 py-3 text-lg;
+}
   
   .input {
     @apply w-full px-4 py-3 rounded-lg border border-gray-300;

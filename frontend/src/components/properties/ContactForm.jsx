@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Send, Phone, Mail, MessageCircle } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import Textarea from '../ui/Textarea';
 import { inquiriesApi } from '../../lib/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../lib/auth';
