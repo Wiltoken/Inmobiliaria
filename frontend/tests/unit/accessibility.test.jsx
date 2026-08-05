@@ -33,6 +33,7 @@ vi.mock('../../src/lib/api', () => ({
   api: { defaults: { headers: { common: {} } } },
   authApi: { register: vi.fn(), login: vi.fn() },
   userApi: { me: vi.fn() },
+  matchesApi: { list: vi.fn(() => Promise.resolve({ data: [] })) },
 }));
 
 vi.mock('../../src/lib/audit', () => ({

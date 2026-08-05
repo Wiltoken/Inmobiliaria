@@ -3,8 +3,11 @@ import { Map, List, SlidersHorizontal, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useProperties } from '../hooks/useProperties';
 import { trackSearch, trackFilter } from '../lib/audit';
+import { useAuth } from '../lib/auth';
+import { matchesApi } from '../lib/api';
 import PropertyGrid from '../components/properties/PropertyGrid';
 import PropertyFilters from '../components/properties/PropertyFilters';
+import PropertyMap from '../components/properties/PropertyMap';
 import Button from '../components/ui/Button';
 import { SkeletonPropertyList } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
@@ -13,6 +16,9 @@ export default function SearchPage({ onPageView }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
   const [showFilters, setShowFilters] = useState(false);
+  const [matchScores, setMatchScores] = useState({});
+
+  const { isAuthenticated, isBuyer } = useAuth();
 
   const {
     properties,
@@ -42,6 +48,24 @@ export default function SearchPage({ onPageView }) {
       searchProperties({});
     }
   }, []);
+
+  // Feature 1: Fetch match scores after properties load (non-blocking)
+  useEffect(() => {
+    if (!isAuthenticated || !isBuyer()) return;
+
+    matchesApi.list()
+      .then((res) => {
+        const scores = {};
+        const matches = res.data?.items || res.data || [];
+        matches.forEach((m) => {
+          if (m.property_id) {
+            scores[m.property_id] = m.score;
+          }
+        });
+        setMatchScores(scores);
+      })
+      .catch(() => {}); // Silently ignore — matches are additive
+  }, [isAuthenticated]);
 
   const handleFilter = (filters) => {
     // Update URL params
@@ -184,13 +208,10 @@ export default function SearchPage({ onPageView }) {
             />
           ) : (
             <>
-              {/* Map View Placeholder */}
+              {/* Map View */}
               {viewMode === 'map' && (
-                <div className="mb-6 h-96 bg-gray-200 rounded-xl flex items-center justify-center">
-                  <div className="text-center">
-                    <Map className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500">Mapa en desarrollo</p>
-                  </div>
+                <div className="mb-6 h-96 rounded-xl overflow-hidden">
+                  <PropertyMap properties={properties} />
                 </div>
               )}
 
@@ -200,6 +221,8 @@ export default function SearchPage({ onPageView }) {
                 loading={loading}
                 onLoadMore={handleLoadMore}
                 hasMore={pagination.page < pagination.totalPages}
+                showMatchScore={isAuthenticated && isBuyer()}
+                matchScores={matchScores}
               />
             </>
           )}

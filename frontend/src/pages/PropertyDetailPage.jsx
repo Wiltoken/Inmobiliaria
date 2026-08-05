@@ -13,6 +13,7 @@ import {
 } from '../lib/audit';
 import PhotoGallery from '../components/properties/PhotoGallery';
 import ContactForm from '../components/properties/ContactForm';
+import MortgageCalculator from '../components/properties/MortgageCalculator';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -393,6 +394,9 @@ export default function PropertyDetailPage({ onPageView }) {
                 </p>
               </Card>
             )}
+
+            {/* Mortgage Calculator */}
+            <MortgageCalculator propertyPrice={property.price} />
 
             {/* Location Map Placeholder */}
             <Card className="p-6">

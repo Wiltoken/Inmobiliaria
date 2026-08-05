@@ -1,14 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Bell, Menu, X, LogOut, User, Settings } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
+import { matchesApi } from '../../lib/api';
 import Badge from '../ui/Badge';
 
 export default function Navbar({ className = '' }) {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isAuthenticated, isBuyer } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [newMatchCount, setNewMatchCount] = useState(0);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthenticated || !isBuyer()) return;
+
+    matchesApi.list()
+      .then((res) => {
+        const matches = res.data?.items || res.data || [];
+        const currentCount = matches.length;
+        const lastCount = parseInt(localStorage.getItem('lastMatchCount') || '0', 10);
+        setNewMatchCount(Math.max(0, currentCount - lastCount));
+      })
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  const handleNotificationsClick = () => {
+    const currentCount = parseInt(localStorage.getItem('lastMatchCount') || '0', 10);
+    const totalMatches = currentCount + newMatchCount;
+    localStorage.setItem('lastMatchCount', String(totalMatches));
+    setNewMatchCount(0);
+  };
 
   const handleLogout = () => {
     logout();
@@ -45,11 +67,16 @@ export default function Navbar({ className = '' }) {
           <div className="flex items-center gap-2">
             {/* Notifications */}
             <button
+              onClick={handleNotificationsClick}
               className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
               aria-label="Notificaciones"
             >
               <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
+              {newMatchCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {newMatchCount > 99 ? '99+' : newMatchCount}
+                </span>
+              )}
             </button>
 
             {/* User Menu */}
