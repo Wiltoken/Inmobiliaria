@@ -150,6 +150,7 @@ class User(Base):
         "AgentProfile", back_populates="user", uselist=False
     )
     favorites: Mapped[list[Favorite]] = relationship("Favorite", back_populates="user")
+    actions: Mapped[list[UserAction]] = relationship("UserAction", back_populates="user")
 
     __table_args__ = (
         UniqueConstraint("username", "tenant_id", name="uq_user_username_tenant"),
@@ -628,4 +629,35 @@ class Favorite(Base):
         UniqueConstraint("user_id", "property_id", name="uq_favorite_user_property"),
         Index("ix_favorite_user_id", "user_id"),
         Index("ix_favorite_property_id", "property_id"),
+    )
+
+
+# ── User Action / BI Model ────────────────────────────────────────────────────
+
+
+class UserAction(Base):
+    """Frontend user action events for BI/analytics."""
+
+    __tablename__ = "user_actions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    # Relations
+    user: Mapped[User | None] = relationship("User", back_populates="actions")
+
+    __table_args__ = (
+        Index("ix_user_action_user_created", "user_id", "created_at"),
+        Index("ix_user_action_created_at", "created_at", postgresql_using="brin"),
+        Index("ix_user_action_action", "action"),
     )

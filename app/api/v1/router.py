@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1.admin import router as admin_router
 from app.api.v1.agent import router as agent_router
+from app.api.v1.audit import router as audit_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.favorites import router as favorites_router
 from app.api.v1.inquiries import router as inquiries_router
@@ -45,3 +46,6 @@ api_router.include_router(favorites_router)
 
 # Agent: /api/v1/agent/dashboard/* and /api/v1/agent/inquiries
 api_router.include_router(agent_router)
+
+# Audit: /api/v1/audit/user-action
+api_router.include_router(audit_router)

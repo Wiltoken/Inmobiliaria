@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1F3864;
+  --color-primary-light: #2B579A;
+  --color-accent: #E8A838;
+  --color-success: #16A34A;
+  --color-error: #DC2626;
+  --color-warning: #F59E0B;
+  
+  --font-family-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-family-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  
+  * {
+    @apply border-gray-200;
+  }
+  
+  input, textarea, select {
+    @apply bg-white;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-light;
+    @apply focus:ring-primary;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-gray-100 text-gray-700 hover:bg-gray-200;
+    @apply focus:ring-gray-400;
+  }
+  
+  .btn-accent {
+    @apply btn bg-accent text-white hover:bg-amber-500;
+    @apply focus:ring-accent;
+  }
+  
+  .btn-outline {
+    @apply btn border-2 border-primary text-primary hover:bg-primary hover:text-white;
+    @apply focus:ring-primary;
+  }
+  
+  .btn-ghost {
+    @apply btn bg-transparent text-gray-600 hover:bg-gray-100;
+    @apply focus:ring-gray-400;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  .btn-lg {
+    @apply px-6 py-3 text-lg;
+  }
+  
+  .input {
+    @apply w-full px-4 py-3 rounded-lg border border-gray-300;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+    @apply placeholder:text-gray-400;
+    @apply transition-all duration-200;
+  }
+  
+  .input-error {
+    @apply border-error focus:ring-error;
+  }
+  
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden;
+  }
+  
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-md hover:border-primary/20;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply badge bg-primary/10 text-primary;
+  }
+  
+  .badge-accent {
+    @apply badge bg-accent/10 text-amber-700;
+  }
+  
+  .badge-success {
+    @apply badge bg-success/10 text-success;
+  }
+  
+  .badge-error {
+    @apply badge bg-error/10 text-error;
+  }
+  
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+  
+  .page-container {
+    @apply min-h-screen min-h-[100dvh] flex flex-col;
+  }
+  
+  .main-content {
+    @apply flex-1 pb-20 md:pb-0 md:ml-64;
+  }
+}
+
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Price formatting */
+.price {
+  @apply font-bold text-primary;
+}
+
+.price-large {
+  @apply text-2xl md:text-3xl font-bold text-primary;
+}
+
+/* Match score badge */
+.match-score {
+  @apply absolute top-2 right-2 bg-accent text-white px-2 py-1 rounded-lg text-sm font-bold;
+}
+
+/* Mobile bottom nav safe area */
+@media (max-width: 767px) {
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Property card image aspect ratio */
+.property-image {
+  aspect-ratio: 4/3;
+  object-fit: cover;
+}
+
+/* Gallery swipe container */
+.gallery-container {
+  touch-action: pan-y;
+}
+
+/* Map marker */
+.map-marker {
+  background: var(--color-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}

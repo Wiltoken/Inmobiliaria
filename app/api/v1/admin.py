@@ -26,7 +26,7 @@ from app.adapters.redis_client import revoke_all_user_refresh_tokens
 from app.api.v1.deps import get_db, require_role
 from app.config import settings
 from app.core.security import hash_password
-from app.domain.models import AuditLog, LoginAttempt, PasswordReset, Property, PropertyStatus, Role, User
+from app.domain.models import AuditLog, LoginAttempt, PasswordReset, Property, PropertyStatus, Role, User, UserAction
 from app.domain.schemas import (
     AuditLogEntry,
     ComplianceReport,
@@ -472,4 +472,148 @@ def _build_admin_property_response(prop: Property) -> PropertyResponse:
         updated_at=prop.updated_at,
         published_at=prop.published_at,
         photos=[],
+    )
+
+
+# ── GET /api/v1/admin/analytics ─────────────────────────────────────────────────
+
+
+class AnalyticsResponse(BaseModel):
+    dau: int = Field(description="Daily active users (unique users today)")
+    searches_today: int
+    properties_viewed: int
+    inquiries_sent: int
+    events_over_time: list[dict] = Field(description="Events over last 7 days by action type")
+    user_roles: list[dict] = Field(description="User count by role")
+    top_properties: list[dict] = Field(description="Top 10 viewed properties")
+    recent_actions: list[dict] = Field(description="Last 50 user actions")
+
+
+@router.get(
+    "/analytics",
+    response_model=AnalyticsResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+    },
+)
+async def get_analytics(
+    request: Request,
+    user: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> AnalyticsResponse:
+    """Get BI dashboard analytics data.
+
+    Requires admin or super_admin role.
+    """
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = today_start - timedelta(days=7)
+
+    # DAU - unique users with actions today
+    dau_result = await session.execute(
+        select(func.count(func.distinct(UserAction.user_id)))
+        .where(UserAction.created_at >= today_start)
+        .where(UserAction.user_id.isnot(None))
+    )
+    dau = dau_result.scalar_one() or 0
+
+    # Searches today
+    searches_result = await session.execute(
+        select(func.count())
+        .select_from(UserAction)
+        .where(UserAction.created_at >= today_start)
+        .where(UserAction.action == "search_performed")
+    )
+    searches_today = searches_result.scalar_one() or 0
+
+    # Properties viewed today
+    viewed_result = await session.execute(
+        select(func.count())
+        .select_from(UserAction)
+        .where(UserAction.created_at >= today_start)
+        .where(UserAction.action == "property_viewed")
+    )
+    properties_viewed = viewed_result.scalar_one() or 0
+
+    # Inquiries sent today
+    inquiries_result = await session.execute(
+        select(func.count())
+        .select_from(UserAction)
+        .where(UserAction.created_at >= today_start)
+        .where(UserAction.action == "inquiry_sent")
+    )
+    inquiries_sent = inquiries_result.scalar_one() or 0
+
+    # Events over time (last 7 days, grouped by date and action)
+    events_result = await session.execute(
+        select(
+            func.date_trunc('day', UserAction.created_at).label('day'),
+            UserAction.action,
+            func.count(),
+        )
+        .where(UserAction.created_at >= week_ago)
+        .group_by('day', UserAction.action)
+        .order_by('day')
+    )
+    events_raw = events_result.all()
+
+    # Build events_over_time as a list of {date, events} per day
+    events_by_day: dict[str, int] = {}
+    for row in events_raw:
+        day_str = row.day.strftime('%a') if hasattr(row.day, 'strftime') else str(row.day)
+        events_by_day[day_str] = events_by_day.get(day_str, 0) + row.count
+    events_over_time = [{"date": k, "events": v} for k, v in sorted(events_by_day.items())]
+
+    # User roles distribution
+    roles_result = await session.execute(
+        select(User.roles, func.count())
+        .join(User.roles)
+        .group_by(User.roles)
+    )
+    roles_raw = roles_result.all()
+    user_roles = [
+        {"role": r.role.name if hasattr(r.role, 'name') else str(r.roles), "count": cnt}
+        for r, cnt in roles_raw
+    ]
+
+    # Top 10 viewed properties (from user_actions.details.property_id)
+    top_props_result = await session.execute(
+        select(UserAction.details, func.count().label('views'))
+        .where(UserAction.action == "property_viewed")
+        .where(UserAction.created_at >= week_ago)
+        .group_by(UserAction.details)
+        .order_by(func.count().desc())
+        .limit(10)
+    )
+    top_properties = [
+        {"id": str(row.details.get('property_id', '')) if row.details else '', "views": row.views}
+        for row in top_props_result.all()
+    ]
+
+    # Recent 50 actions
+    recent_result = await session.execute(
+        select(UserAction)
+        .order_by(UserAction.created_at.desc())
+        .limit(50)
+    )
+    recent_actions = [
+        {
+            "action": r.action,
+            "user": r.user.username if r.user else "Anonymous",
+            "time": f"{(now - r.created_at).total_seconds() // 60:.0f}m ago",
+            "details": r.details,
+        }
+        for r in recent_result.all()
+    ]
+
+    return AnalyticsResponse(
+        dau=dau,
+        searches_today=searches_today,
+        properties_viewed=properties_viewed,
+        inquiries_sent=inquiries_sent,
+        events_over_time=events_over_time,
+        user_roles=user_roles,
+        top_properties=top_properties,
+        recent_actions=recent_actions,
     )
