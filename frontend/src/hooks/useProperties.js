@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { propertiesApi } from '../lib/api';
 
 /**
@@ -15,10 +15,14 @@ export function useProperties() {
     totalPages: 0,
   });
 
+  // Last filters used, so pagination (loadMore) keeps the same search context.
+  const lastFiltersRef = useRef({});
+
   /**
    * Fetch properties with optional filters
    */
   const fetchProperties = useCallback(async (filters = {}, page = 1) => {
+    lastFiltersRef.current = filters;
     setLoading(true);
     setError(null);
 
@@ -61,7 +65,7 @@ export function useProperties() {
    */
   const loadMore = useCallback(async () => {
     if (pagination.page < pagination.totalPages && !loading) {
-      return fetchProperties({}, pagination.page + 1);
+      return fetchProperties(lastFiltersRef.current, pagination.page + 1);
     }
     return null;
   }, [pagination.page, pagination.totalPages, loading, fetchProperties]);

@@ -81,48 +81,49 @@ export default function PropertyDetailPage({ onPageView }) {
 
   const calculateMatchScore = (property, profile) => {
     let score = 0;
-    let factors = 0;
+    let maxScore = 0;
 
-    // Price match
+    // Price match (weight 30)
     if (profile.budget_min && profile.budget_max) {
+      maxScore += 30;
       if (property.price >= profile.budget_min && property.price <= profile.budget_max) {
         score += 30;
       }
-      factors++;
     }
 
-    // Area match
+    // Area match (weight 20)
     if (profile.area_min && profile.area_max) {
+      maxScore += 20;
       if (property.area_m2 >= profile.area_min && property.area_m2 <= profile.area_max) {
         score += 20;
       }
-      factors++;
     }
 
-    // Rooms match
+    // Rooms match (weight 20)
     if (profile.rooms_min) {
+      maxScore += 20;
       if (property.rooms >= profile.rooms_min) {
         score += 20;
       }
-      factors++;
     }
 
-    // Property type match
+    // Property type match (weight 20)
     if (profile.preferred_property_types?.length) {
+      maxScore += 20;
       if (profile.preferred_property_types.includes(property.type)) {
         score += 20;
       }
-      factors++;
     }
 
-    // Location match
+    // Location match (weight 10)
     if (profile.preferred_locations?.length && property.location?.city) {
+      maxScore += 10;
       if (profile.preferred_locations.includes(property.location.city)) {
         score += 10;
       }
     }
 
-    return factors > 0 ? Math.round((score / (factors * 10)) * 100) : 0;
+    return maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
   };
 
   const handleFavoriteToggle = async () => {
