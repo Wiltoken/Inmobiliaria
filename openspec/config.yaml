@@ -26,16 +26,26 @@ rules:
     - Keep tasks completable in one session
   apply:
     tdd: false
-    test_command: ""
+    test_command: "python -m pytest tests/ -v --tb=short"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "python -m pytest tests/ -v --tb=short"
+    build_command: "docker compose build"
     coverage_threshold: 0
 
 testing:
   strict_tdd: false
-  detected: "2026-07-31"
+  detected: "2026-08-06"
+  runner:
+    command: "python -m pytest tests/ -v --tb=short"
+    framework: "pytest + pytest-asyncio"
   layers:
     unit: { available: true, tool: pytest }
     integration: { available: true, tool: pytest-asyncio }
-    e2e: { available: true, tool: httpx }
+    e2e: { available: true, tool: "httpx (ASGITransport)" }
+  coverage:
+    available: true
+    command: "python -m pytest tests/ --cov=app --cov-report=html --cov-report=term"
+  quality:
+    linter: { available: true, command: "python -m ruff check app/" }
+    type_checker: { available: false, command: "" }
+    formatter: { available: true, command: "python -m ruff format app/" }
