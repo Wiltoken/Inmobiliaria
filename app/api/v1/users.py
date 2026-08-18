@@ -105,9 +105,16 @@ async def delete_my_data(
     anonymizes audit logs, and invalidates the current token.
     """
     now = datetime.now(UTC)
-    user.deleted_at = now
-    user.deletion_reason = "user_requested"
-    user.is_active = False
+
+    # Re-fetch the user in this session: the `user` dependency is detached
+    # (fetched and closed in get_current_user), so mutating it directly would
+    # not persist. Work on a session-bound instance instead.
+    result = await session.execute(select(User).where(User.id == user.id))
+    db_user = result.scalar_one()
+
+    db_user.deleted_at = now
+    db_user.deletion_reason = "user_requested"
+    db_user.is_active = False
 
     profiles_result = await session.execute(
         select(BuyerProfile).where(BuyerProfile.user_id == user.id)

@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import uuid
 
 from redis.asyncio import ConnectionPool, Redis
-
-if TYPE_CHECKING:
-    import uuid
 
 from app.config import settings
 
@@ -137,8 +134,9 @@ async def rate_limit_check(
     pipe = client.pipeline()
     # Remove entries outside the window
     pipe.zremrangebyscore(key, 0, window_start)
-    # Add current request with timestamp as score
-    pipe.zadd(key, {f"{now_ms}": now_ts})
+    # Add current request with a unique member and millisecond score (the same
+    # unit as window_start, so zremrangebyscore eviction is correct).
+    pipe.zadd(key, {str(uuid.uuid4()): now_ms})
     # Count requests in window
     pipe.zcard(key)
     # Set TTL on the key so abandoned keys auto-cleanup

@@ -160,9 +160,25 @@ async def login(
         )
         raise InvalidCredentialsError()
 
+    # Step 2.5: Reject soft-deleted accounts (no user-existence reveal)
+    if user.deleted_at is not None:
+        log.info("login_failed_deleted_account", user_id=str(user.id), ip=ip)
+        await _audit_log(
+            session=session,
+            action="login_failed",
+            user_id=user.id,
+            tenant_id=user.tenant_id,
+            ip_address=ip,
+            details={"reason": "account_deleted"},
+        )
+        raise InvalidCredentialsError()
+
     # Step 3: Account lockout check
-    if user.is_locked and user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        locked_until_str = user.locked_until.isoformat()
+    locked_until = user.locked_until
+    if locked_until is not None and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if user.is_locked and locked_until and locked_until > datetime.now(timezone.utc):
+        locked_until_str = locked_until.isoformat()
         log.info("login_blocked_locked_account", user_id=str(user.id), ip=ip)
         await _audit_log(
             session=session,
