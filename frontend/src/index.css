@@ -96,7 +96,7 @@
     @apply block text-sm font-medium text-gray-700 mb-1;
   }
   
-  .card {
+  @utility card {
     @apply bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden;
   }
   
@@ -104,7 +104,7 @@
     @apply card transition-all duration-200 hover:shadow-md hover:border-primary/20;
   }
   
-  .badge {
+  @utility badge {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
   }
   
@@ -135,7 +135,6 @@
   .main-content {
     @apply flex-1 pb-20 md:pb-0 md:ml-64;
   }
-}
 
 @layer utilities {
   .safe-top {

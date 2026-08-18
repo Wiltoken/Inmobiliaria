@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Map, List, SlidersHorizontal, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useProperties } from '../hooks/useProperties';
-import { trackSearch, trackFilter } from '../lib/audit';
+import { trackSearch, trackFilterUsed } from '../lib/audit';
 import { useAuth } from '../lib/auth';
 import { matchesApi } from '../lib/api';
 import PropertyGrid from '../components/properties/PropertyGrid';
@@ -80,7 +80,7 @@ export default function SearchPage({ onPageView }) {
     // Track filter usage
     Object.entries(filters).forEach(([key, value]) => {
       if (value && key !== 'type') {
-        trackFilter(key, value);
+        trackFilterUsed(key, value);
       }
     });
 
