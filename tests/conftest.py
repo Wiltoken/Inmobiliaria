@@ -7,8 +7,29 @@ import os
 # Set test secrets BEFORE importing app.config to avoid the SECRET_KEY validator
 os.environ.setdefault("SECRET_KEY", "test-secret-key-minimum-256-bits-for-testing-only-!!!!!!!!")
 
+# Pin security/policy settings to their code defaults so the local `.env`
+# (which holds production values) does not leak into tests. Environment
+# variables take precedence over `.env` in pydantic-settings.
+_TEST_DEFAULTS = {
+    "MAX_LOGIN_ATTEMPTS": "3",
+    "LOCKOUT_DURATION_MINUTES": "15",
+    "ACCESS_TOKEN_EXPIRE_MINUTES": "15",
+    "REFRESH_TOKEN_EXPIRE_DAYS": "7",
+    "INACTIVITY_TIMEOUT_MINUTES": "30",
+    "PASSWORD_MIN_LENGTH": "8",
+    "PASSWORD_REQUIRE_SPECIAL": "true",
+    "PASSWORD_EXPIRY_DAYS": "30",
+    "RECAPTCHA_ENABLED": "false",
+    # Higher than the code default (5) so multi-request e2e flows don't hit 429.
+    "RATE_LIMIT_REQUESTS_PER_SECOND": "10",
+    "RATE_LIMIT_WINDOW_SECONDS": "1",
+    "AUDIT_RETENTION_DAYS": "365",
+}
+for _key, _value in _TEST_DEFAULTS.items():
+    os.environ.setdefault(_key, _value)
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import AsyncGenerator, Generator
 
 import pytest
@@ -19,7 +40,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import AuthSettings
 from app.domain.models import Base, Role, User
 from app.main import app
-
 
 # --------------------------------------------------------------------------- #
 # Settings fixture
@@ -51,32 +71,17 @@ def test_settings() -> AuthSettings:
 
 
 @pytest_asyncio.fixture
-async def test_db(test_settings: AuthSettings) -> AsyncGenerator[AsyncSession, None]:
-    """Create a fresh in-memory SQLite DB for each test.
+async def test_db(test_client: AsyncClient) -> AsyncGenerator[AsyncSession, None]:
+    """Yield a session bound to the same engine the app uses (via test_client).
 
-    - Creates all tables before the test
-    - Yields the session
-    - Drops all tables after the test
+    Sharing the engine — rather than opening a second ``:memory:`` SQLite DB —
+    ensures data created here is visible to the app under test.
     """
-    engine = create_async_engine(
-        test_settings.database_url,
-        echo=False,
-        connect_args={"check_same_thread": False},
-    )
+    from app.adapters.database import get_session_maker
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    session_maker = async_sessionmaker(
-        engine,
-        expire_on_commit=False,
-        class_=AsyncSession,
-    )
-
+    session_maker = get_session_maker()
     async with session_maker() as session:
         yield session
-
-    await engine.dispose()
 
 
 # --------------------------------------------------------------------------- #
@@ -187,8 +192,9 @@ async def test_user_with_role(test_db: AsyncSession, test_user: User) -> tuple[U
 @pytest.fixture
 def mock_redis(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
     """Patch redis client to use fakeredis for tests that don't need real Redis."""
-    import app.adapters.redis_client as redis_module
     import fakeredis.aioredis
+
+    import app.adapters.redis_client as redis_module
 
     fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
 

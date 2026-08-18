@@ -13,7 +13,6 @@ from app.core.security import hash_password
 from app.domain.models import Base, Role, User
 from app.main import app
 
-
 # --------------------------------------------------------------------------- #
 # E2E fixtures
 # --------------------------------------------------------------------------- #
@@ -21,7 +20,7 @@ from app.main import app
 @pytest_asyncio.fixture
 async def e2e_client() -> AsyncClient:
     """Create a test client backed by an in-memory SQLite DB."""
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
@@ -48,6 +47,7 @@ async def e2e_client() -> AsyncClient:
 
     # Patch redis to use fakeredis
     import fakeredis.aioredis
+
     import app.adapters.redis_client as redis_module
 
     fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
@@ -69,7 +69,6 @@ async def e2e_client() -> AsyncClient:
 @pytest_asyncio.fixture
 async def e2e_user(e2e_client: AsyncClient) -> User:
     """Create a real user in the test DB."""
-    from sqlalchemy.ext.asyncio import AsyncSession
     from app.adapters.database import get_session_maker
 
     session_maker = get_session_maker()

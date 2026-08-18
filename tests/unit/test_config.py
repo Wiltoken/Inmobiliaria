@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
 from app.config import AuthSettings, YAMLConfigLoader
-
 
 # --------------------------------------------------------------------------- #
 # AuthSettings defaults
@@ -61,9 +58,13 @@ class TestAuthSettingsDefaults:
         assert settings.recaptcha_enabled is False
         assert settings.recaptcha_score_threshold == 0.5
 
-    def test_rate_limit_defaults(self) -> None:
-        """Rate limiting defaults to 5 req/s."""
+    def test_rate_limit_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Rate limiting defaults to 5 req/s (isolated from the app-level override)."""
+        # The test suite pins RATE_LIMIT_REQUESTS_PER_SECOND=10 so multi-request
+        # e2e flows don't hit 429. Assert the real code default here in isolation.
+        monkeypatch.delenv("RATE_LIMIT_REQUESTS_PER_SECOND", raising=False)
         settings = AuthSettings(
+            _env_file=None,
             secret_key="test-secret-key-minimum-256-bits-for-testing-only!!!!!",
         )
         assert settings.rate_limit_requests_per_second == 5
