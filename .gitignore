@@ -1,2 +1,32 @@
+# ── Environment / secrets ────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ───────────────────────────────────────────────────────────────
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ── Node / frontend (redundant with frontend/.gitignore, kept for safety) ──
+node_modules/
+dist/
+.vite/
+
+# ── OS / editor ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*~
+~$*
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+*.log
