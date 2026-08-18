@@ -18,6 +18,10 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_active_user, get_db
+from app.core.notifications import (
+    send_inquiry_created_notification,
+    send_inquiry_response_notification,
+)
 from app.domain.models import (
     Inquiry,
     InquiryStatus,
@@ -125,7 +129,20 @@ async def create_inquiry(
     )
     session.add(inquiry)
     await session.flush()
-    await session.refresh(inquiry)
+
+    # Load owner email for notification
+    owner_result = await session.execute(select(User.email).where(User.id == to_user_id))
+    owner_email: str | None = owner_result.scalar_one_or_none()
+
+    if owner_email:
+        send_inquiry_created_notification(
+            buyer_name=user.username,
+            owner_email=owner_email,
+            property_title=prop.title,
+            inquiry_message=data.message,
+            contact_preference=data.contact_preference,
+            inquiry_id=str(inquiry.id),
+        )
 
     log.info("inquiry_created", inquiry_id=str(inquiry.id), from_user=str(user.id))
     return InquiryResponse.model_validate(inquiry)
@@ -258,6 +275,12 @@ async def respond_to_inquiry(
             detail="You can only respond to inquiries you received",
         )
 
+    if inquiry.status == InquiryStatus.CLOSED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot respond to a closed inquiry",
+        )
+
     # Map action to status
     action_to_status = {
         "accept": InquiryStatus.INTERESTED,
@@ -276,7 +299,28 @@ async def respond_to_inquiry(
     inquiry.response_action = ResponseAction.NO_ACTION
 
     await session.flush()
-    await session.refresh(inquiry)
+
+    # Notify buyer of the owner's response
+    buyer_result = await session.execute(
+        select(User.email).where(User.id == inquiry.from_user_id)
+    )
+    buyer_email: str | None = buyer_result.scalar_one_or_none()
+
+    # Load property title for the notification
+    prop_result = await session.execute(
+        select(Property.title).where(Property.id == inquiry.property_id)
+    )
+    property_title: str = prop_result.scalar_one_or_none() or "your property"
+
+    if buyer_email:
+        send_inquiry_response_notification(
+            owner_name=user.username,
+            buyer_email=buyer_email,
+            property_title=property_title,
+            action=data.action,
+            response_message=data.response_message,
+            contact_preference=inquiry.contact_preference,
+        )
 
     log.info(
         "inquiry_responded",

@@ -87,6 +87,10 @@ class AuthSettings(BaseSettings):
     # ── Application ───────────────────────────────────────────────────────────
     app_env: str = Field(default="development", description="Runtime environment.")
     log_level: str = Field(default="INFO", description="Logging level.")
+    app_base_url: str = Field(
+        default="http://localhost:8000",
+        description="Base URL for the application (used in email links).",
+    )
 
     # ── Matching ──────────────────────────────────────────────────────────────
     match_cache_ttl_seconds: int = Field(
