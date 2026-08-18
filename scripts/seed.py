@@ -14,30 +14,27 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from passlib.context import CryptContext
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.database import AsyncSessionLocal, engine
+from app.adapters.database import get_engine, get_session_maker
 from app.domain.models import (
-    Base,
-    User,
-    Role,
-    UserRole,
-    BuyerProfile,
-    SellerProfile,
     AgentProfile,
-    Property,
-    PropertyPhoto,
-    PropertyType,
-    PropertyOperation,
-    PropertyStatus,
-    Project,
-    Match,
-    Inquiry,
-    InquiryStatus,
+    Base,
+    BuyerProfile,
     ContactPreference,
     Favorite,
-    LoginAttempt,
+    Inquiry,
+    InquiryStatus,
+    Match,
+    Property,
+    PropertyOperation,
+    PropertyPhoto,
+    PropertyStatus,
+    PropertyType,
+    Role,
+    SellerProfile,
+    User,
+    UserRole,
 )
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -75,31 +72,31 @@ PROPERTY_FEATURES = [
 ]
 
 PROPERTY_TITLES = {
-    PropertyType.apartment: [
+    PropertyType.APARTMENT: [
         "Apartamento moderno en {neighborhood}",
         "Apartaestudio luminoso {neighborhood}",
         "Hermoso apartamento familiar {neighborhood}",
         "Penthouse de lujo en {neighborhood}",
         "Apartamento con vista {neighborhood}",
     ],
-    PropertyType.house: [
+    PropertyType.HOUSE: [
         "Casa amplia en {neighborhood}",
         "Casa familiar {neighborhood}",
         "Casa de dos pisos {neighborhood}",
         "Casa campestre {neighborhood}",
         "Casa esquinera {neighborhood}",
     ],
-    PropertyType.office: [
+    PropertyType.OFFICE: [
         "Oficina ejecutiva {neighborhood}",
         "Consultorio médico {neighborhood}",
         "Oficina en centro empresarial {neighborhood}",
     ],
-    PropertyType.commercial: [
+    PropertyType.COMMERCIAL: [
         "Local comercial {neighborhood}",
         "Bodega industrial {neighborhood}",
         "Local en centro comercial {neighborhood}",
     ],
-    PropertyType.land: [
+    PropertyType.LAND: [
         "Lote residencial {neighborhood}",
         "Terreno comercial {neighborhood}",
         "Lote campestre {neighborhood}",
@@ -149,16 +146,18 @@ async def seed(session: AsyncSession):
 
     # ── 2. Admin ──────────────────────────────────────────────────────────────
     admin = User(
+        id=uuid.uuid4(),
         username="admin",
         email="admin@inmobiliaria.com",
         password_hash=pwd_context.hash("Admin123!"),
+        tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
         is_active=True,
         consent_given_at=datetime.now(timezone.utc),
     )
     session.add(admin)
     session.add(UserRole(user_id=admin.id, role_id=roles["super_admin"].id))
     await session.flush()
-    print(f"  ✅ Admin: admin@inmobiliaria.com / Admin123!")
+    print("  ✅ Admin: admin@inmobiliaria.com / Admin123!")
 
     # ── 3. Agentes ────────────────────────────────────────────────────────────
     agents = []
@@ -168,6 +167,7 @@ async def seed(session: AsyncSession):
             username=f"agent{i+1}",
             email=f"agent{i+1}@inmobiliaria.com",
             password_hash=pwd_context.hash("Agent123!"),
+            tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
             is_active=True,
             consent_given_at=datetime.now(timezone.utc),
         )
@@ -193,6 +193,7 @@ async def seed(session: AsyncSession):
             username=f"seller{i+1}",
             email=f"seller{i+1}@inmobiliaria.com",
             password_hash=pwd_context.hash("Seller123!"),
+            tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
             is_active=True,
             consent_given_at=datetime.now(timezone.utc),
         )
@@ -218,6 +219,7 @@ async def seed(session: AsyncSession):
             username=f"buyer{i+1}",
             email=f"buyer{i+1}@inmobiliaria.com",
             password_hash=pwd_context.hash("Buyer123!"),
+            tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
             is_active=True,
             consent_given_at=datetime.now(timezone.utc),
         )
@@ -253,16 +255,16 @@ async def seed(session: AsyncSession):
 
         # Price ranges by type
         price_ranges = {
-            PropertyType.apartment: (120_000_000, 800_000_000),
-            PropertyType.house: (200_000_000, 2_500_000_000),
-            PropertyType.office: (80_000_000, 500_000_000),
-            PropertyType.commercial: (150_000_000, 1_200_000_000),
-            PropertyType.land: (50_000_000, 3_000_000_000),
+            PropertyType.APARTMENT: (120_000_000, 800_000_000),
+            PropertyType.HOUSE: (200_000_000, 2_500_000_000),
+            PropertyType.OFFICE: (80_000_000, 500_000_000),
+            PropertyType.COMMERCIAL: (150_000_000, 1_200_000_000),
+            PropertyType.LAND: (50_000_000, 3_000_000_000),
         }
         price_min, price_max = price_ranges[prop_type]
         price = round(random.randint(price_min, price_max) / 1_000_000) * 1_000_000
 
-        status = random.choice([PropertyStatus.published, PropertyStatus.published, PropertyStatus.published, PropertyStatus.reserved])
+        status = random.choice([PropertyStatus.ACTIVE, PropertyStatus.ACTIVE, PropertyStatus.ACTIVE, PropertyStatus.PENDING])
 
         lat, lon = random_location(city_name)
         from geoalchemy2.shape import from_shape
@@ -349,11 +351,11 @@ async def seed(session: AsyncSession):
                 "¿Podrían enviarme más fotos?",
                 "Estoy interesado, ¿aceptan crédito hipotecario?",
             ]),
-            contact_preference=random.choice([ContactPreference.email, ContactPreference.phone, ContactPreference.both]),
-            status=random.choice([InquiryStatus.pending, InquiryStatus.pending, InquiryStatus.responded]),
+            contact_preference=random.choice([ContactPreference.EMAIL, ContactPreference.PHONE, ContactPreference.EITHER]),
+            status=random.choice([InquiryStatus.PENDING, InquiryStatus.PENDING, InquiryStatus.REPLIED]),
             created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 10)),
         )
-        if inquiry.status == InquiryStatus.responded:
+        if inquiry.status == InquiryStatus.REPLIED:
             inquiry.response_message = "Gracias por tu interés. La propiedad está disponible. ¿Qué día te queda bien para una visita?"
             inquiry.updated_at = datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 48))
         session.add(inquiry)
@@ -372,14 +374,15 @@ async def seed(session: AsyncSession):
     print(f"  ✅ {len(favs)} favoritos creados")
 
     await session.commit()
-    print(f"\n🎉 Seed completo. Datos listos para probar.")
+    print("\n🎉 Seed completo. Datos listos para probar.")
 
 
 async def main():
+    engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    async with AsyncSessionLocal() as session:
+    async with get_session_maker()() as session:
         await seed(session)
 
     await engine.dispose()
