@@ -5,17 +5,17 @@ Revises: 001
 Create Date: 2026-07-31
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from alembic import op
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 
 # revision identifiers, used by Alembic.
 revision: str = "002"
-down_revision: Union[str, None] = "001"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "001"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -24,70 +24,6 @@ def upgrade() -> None:
 
     # Enable pg_trgm for fuzzy text search on titles and descriptions
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-
-    # ── property_type_enum ──────────────────────────────────────────────────────
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE property_type_enum AS ENUM (
-                'apartment', 'house', 'commercial', 'land', 'office', 'warehouse', 'room'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-    # ── property_operation_enum ────────────────────────────────────────────────
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE property_operation_enum AS ENUM ('sale', 'rent', 'lease');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-    # ── property_status_enum ───────────────────────────────────────────────────
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE property_status_enum AS ENUM (
-                'active', 'pending', 'sold', 'rented', 'withdrawn', 'rejected'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-    # ── contact_preference_enum ────────────────────────────────────────────────
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE contact_preference_enum AS ENUM (
-                'email', 'phone', 'whatsapp', 'either'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-    # ── inquiry_status_enum ────────────────────────────────────────────────────
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE inquiry_status_enum AS ENUM (
-                'pending', 'replied', 'interested', 'not_interested'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-    # ── response_action_enum ──────────────────────────────────────────────────
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE response_action_enum AS ENUM (
-                'sent_email', 'sent_whatsapp', 'called', 'scheduled_viewing', 'no_action'
-            );
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
 
     # ── projects ───────────────────────────────────────────────────────────────
     op.create_table(
@@ -149,9 +85,9 @@ def upgrade() -> None:
     op.create_table(
         "properties",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("type", sa.Enum("apartment", "house", "commercial", "land", "office", "warehouse", "room", name="property_type_enum", create_constraint=True), nullable=False),
-        sa.Column("operation", sa.Enum("sale", "rent", "lease", name="property_operation_enum", create_constraint=True), nullable=False),
-        sa.Column("status", sa.Enum("active", "pending", "sold", "rented", "withdrawn", "rejected", name="property_status_enum", create_constraint=True), nullable=False),
+        sa.Column("type", sa.Enum("apartment", "house", "commercial", "land", "office", "warehouse", "room", name="property_type_enum"), nullable=False),
+        sa.Column("operation", sa.Enum("sale", "rent", "lease", name="property_operation_enum"), nullable=False),
+        sa.Column("status", sa.Enum("active", "pending", "sold", "rented", "withdrawn", "rejected", name="property_status_enum"), nullable=False),
         sa.Column("price", sa.Float(), nullable=False),
         sa.Column("area_m2", sa.Float(), nullable=True),
         sa.Column("location", JSONB, nullable=True, default=dict),
@@ -174,8 +110,6 @@ def upgrade() -> None:
     op.create_index("ix_property_operation", "properties", ["operation"])
     op.create_index("ix_property_status", "properties", ["status"])
     op.create_index("ix_property_price", "properties", ["price"])
-    # GIST index on location (GeoJSON Point)
-    op.create_index("ix_property_location", "properties", ["location"], postgresql_using="gist")
     # GIN trgm indexes on title and description for fuzzy search
     op.create_index("ix_property_title_trgm", "properties", ["title"], postgresql_using="gin", postgresql_ops={"title": "gin_trgm_ops"})
     op.create_index("ix_property_description_trgm", "properties", ["description"], postgresql_using="gin", postgresql_ops={"description": "gin_trgm_ops"})
@@ -213,10 +147,9 @@ def upgrade() -> None:
         sa.Column("to_user_id", UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("property_id", UUID(as_uuid=True), sa.ForeignKey("properties.id", ondelete="CASCADE"), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
-        sa.Column("contact_preference", sa.Enum("email", "phone", "whatsapp", "either", name="contact_preference_enum", create_constraint=True), nullable=False),
-        sa.Column("status", sa.Enum("pending", "replied", "interested", "not_interested", name="inquiry_status_enum", create_constraint=True), nullable=False),
-        sa.Column("response_message", sa.Text(), nullable=True),
-        sa.Column("response_action", sa.Enum("sent_email", "sent_whatsapp", "called", "scheduled_viewing", "no_action", name="response_action_enum", create_constraint=True), nullable=True),
+        sa.Column("contact_preference", sa.Enum("email", "phone", "whatsapp", "either", name="contact_preference_enum"), nullable=False),
+        sa.Column("status", sa.Enum("pending", "replied", "interested", "not_interested", name="inquiry_status_enum"), nullable=False),
+        sa.Column("response_action", sa.Enum("sent_email", "sent_whatsapp", "called", "scheduled_viewing", "no_action", name="response_action_enum"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_inquiry_from_user_id", "inquiries", ["from_user_id"])

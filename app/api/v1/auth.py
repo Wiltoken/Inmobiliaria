@@ -14,6 +14,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.adapters.google_recaptcha import get_captcha_verifier
 from app.adapters.redis_client import (
@@ -137,7 +138,9 @@ async def login(
 
     # Step 1: User lookup by username + tenant
     result = await session.execute(
-        select(User).where(
+        select(User)
+        .options(selectinload(User.roles))
+        .where(
             User.username == body.username,
             User.tenant_id == tenant_id,
         )
@@ -173,7 +176,10 @@ async def login(
 
     # Step 4: Password expiry check
     if settings.password_expiry_days > 0 and user.password_changed_at:
-        expiry_date = user.password_changed_at + timedelta(days=settings.password_expiry_days)
+        pwd_changed = user.password_changed_at
+        if pwd_changed.tzinfo is None:
+            pwd_changed = pwd_changed.replace(tzinfo=timezone.utc)
+        expiry_date = pwd_changed + timedelta(days=settings.password_expiry_days)
         if datetime.now(timezone.utc) > expiry_date:
             log.info("login_failed_password_expired", user_id=str(user.id), ip=ip)
             await _audit_log(
@@ -373,7 +379,9 @@ async def refresh(
     new_refresh_jti = str(uuid.uuid4())
 
     # Get user roles for new access token
-    result = await session.execute(select(User).where(User.id == user_id))
+    result = await session.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+    )
     user = result.scalar_one_or_none()
     user_roles = [role.name for role in user.roles] if user else []
 

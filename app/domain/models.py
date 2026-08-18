@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy import (
@@ -22,6 +24,41 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import ARRAY, CITEXT, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class _UUIDType(TypeDecorator):
+    """UUID type that stores as native UUID on PostgreSQL and as String(36) on SQLite."""
+    impl = String(36)
+    cache_ok = True
+
+    def process_bind_param(self, value: uuid.UUID | None, dialect):
+        if value is not None:
+            return str(value)
+        return value
+
+    def process_result_value(self, value: str | None, dialect):
+        if value is not None:
+            return uuid.UUID(value)
+        return value
+
+
+class _SQLiteJSON(TypeDecorator):
+    """JSON type that stores as JSONB on PostgreSQL and as Text (JSON-encoded) on SQLite."""
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return json.loads(value)
+        return value
+
+
+UUIDType = UUID(as_uuid=True).with_variant(_UUIDType, "sqlite")
 
 
 class Base(DeclarativeBase):
@@ -77,6 +114,7 @@ class InquiryStatus(str, PyEnum):
     REPLIED = "replied"
     INTERESTED = "interested"
     NOT_INTERESTED = "not_interested"
+    CLOSED = "closed"
 
 
 class ResponseAction(str, PyEnum):
@@ -96,13 +134,13 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
+        UUIDType, nullable=False, index=True
     )
     username: Mapped[str] = mapped_column(
-        CITEXT(), nullable=False
+        CITEXT().with_variant(String(255), "sqlite"), nullable=False
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -167,7 +205,7 @@ class Role(Base):
     __tablename__ = "roles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
@@ -183,10 +221,10 @@ class UserRole(Base):
     __tablename__ = "user_roles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     role_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
+        UUIDType, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
     )
 
 
@@ -196,17 +234,19 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+        UUIDType, nullable=True
     )
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
+    details: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -226,10 +266,10 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     jti: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -254,10 +294,10 @@ class PasswordReset(Base):
     __tablename__ = "password_resets"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
@@ -277,10 +317,10 @@ class LoginAttempt(Base):
     __tablename__ = "login_attempts"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -305,20 +345,26 @@ class BuyerProfile(Base):
     __tablename__ = "buyer_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     budget_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     budget_max: Mapped[float | None] = mapped_column(Float, nullable=True)
-    preferred_locations: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=list)
+    preferred_locations: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=list
+    )
     rooms_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bathrooms_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
     area_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     area_max: Mapped[float | None] = mapped_column(Float, nullable=True)
-    preferred_features: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
-    preferred_property_types: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True, default=list)
+    preferred_features: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=dict
+    )
+    preferred_property_types: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String).with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=list
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -344,10 +390,10 @@ class SellerProfile(Base):
     __tablename__ = "seller_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -375,10 +421,10 @@ class AgentProfile(Base):
     __tablename__ = "agent_profiles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     license_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     agency_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -410,7 +456,7 @@ class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     construction_stage: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -433,7 +479,7 @@ class Property(Base):
     __tablename__ = "properties"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     type: Mapped[str] = mapped_column(
         SAEnum(PropertyType, name="property_type_enum", create_constraint=True),
@@ -451,22 +497,24 @@ class Property(Base):
     price: Mapped[float] = mapped_column(Float, nullable=False)
     area_m2: Mapped[float | None] = mapped_column(Float, nullable=True)
     location: Mapped[dict | None] = mapped_column(
-        JSONB, nullable=True, default=dict
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=dict
     )  # GeoJSON Point for PostGIS
     rooms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     bathrooms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    features: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
+    features: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=dict
+    )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     owner_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     agent_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        UUIDType, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     project_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+        UUIDType, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -507,10 +555,10 @@ class PropertyPhoto(Base):
     __tablename__ = "property_photos"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     property_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
     )
     url: Mapped[str] = mapped_column(String(1000), nullable=False)
     s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -533,16 +581,18 @@ class Match(Base):
     __tablename__ = "matches"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     buyer_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("buyer_profiles.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("buyer_profiles.id", ondelete="CASCADE"), nullable=False
     )
     property_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
     )
     score: Mapped[float] = mapped_column(Float, nullable=False)
-    score_breakdown: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
+    score_breakdown: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=dict
+    )
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -567,16 +617,16 @@ class Inquiry(Base):
     __tablename__ = "inquiries"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     from_user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     to_user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     property_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
     )
     message: Mapped[str] = mapped_column(Text, nullable=False)
     contact_preference: Mapped[str] = mapped_column(
@@ -620,13 +670,13 @@ class Favorite(Base):
     __tablename__ = "favorites"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     property_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
+        UUIDType, ForeignKey("properties.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
@@ -652,13 +702,15 @@ class UserAction(Base):
     __tablename__ = "user_actions"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUIDType, primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+        UUIDType, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
+    details: Mapped[dict | None] = mapped_column(
+        JSONB().with_variant(_SQLiteJSON, "sqlite"), nullable=True, default=dict
+    )
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False

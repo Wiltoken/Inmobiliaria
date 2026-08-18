@@ -12,6 +12,7 @@ from typing import Callable
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.adapters.database import get_session_maker
 from app.adapters.redis_client import (
@@ -63,7 +64,7 @@ async def get_current_user(request: Request) -> User:
     session_maker = get_session_maker()
     async with session_maker() as session:
         result = await session.execute(
-            select(User).where(User.id == user_id)
+            select(User).options(selectinload(User.roles)).where(User.id == user_id)
         )
         user = result.scalar_one_or_none()
 

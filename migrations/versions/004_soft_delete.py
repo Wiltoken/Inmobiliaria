@@ -1,19 +1,19 @@
 """Add soft delete fields for Ley 1581 compliance.
 
 Revision ID: 004
-Revises: 003_user_actions
+Revises: 003
 Create Date: 2024-01-01 00:00:00
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "004"
-down_revision: Union[str, None] = "003_user_actions"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "003"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

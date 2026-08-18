@@ -125,7 +125,12 @@ async def rate_limit_check(
     """
     client = get_redis_client()
     key = rate_limit_key(ip_address)
-    now_ts: float = await client.time()
+    raw_now = await client.time()
+    now_ts = (
+        float(raw_now[0]) + float(raw_now[1]) / 1_000_000
+        if isinstance(raw_now, (tuple, list))
+        else float(raw_now)
+    )
     now_ms = int(now_ts * 1000)
     window_start = now_ms - (window_seconds * 1000)
 

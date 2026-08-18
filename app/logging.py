@@ -8,9 +8,17 @@ Log format: ts=ISO8601 level=INFO/WARN/ERROR logger=name event=message key=value
 
 from __future__ import annotations
 
+import json
+
 import structlog
 
 from app.config import settings
+
+
+def _custom_dumps(obj: object, **kwargs: object) -> str:
+    kwargs.pop("serializable_default", None)
+    kwargs.setdefault("default", str)
+    return json.dumps(obj, **kwargs)  # type: ignore[arg-type]
 
 
 def configure_logging() -> None:
@@ -23,7 +31,7 @@ def configure_logging() -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer(serializable_default=str),
+            structlog.processors.JSONRenderer(serializer=_custom_dumps, serializable_default=str),
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,

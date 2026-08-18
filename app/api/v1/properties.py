@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -122,6 +122,12 @@ def _trigger_match_cache_invalidation_on_publish(
         except Exception as exc:
             log.warning("match_cache_invalidation_failed", error=str(exc))
 
+    from app.config import settings
+
+    # Skip cache invalidation on SQLite (testing) — no greenlet context for background tasks
+    if "sqlite" in settings.database_url:
+        return
+
     # Run fire-and-forget (non-blocking)
     try:
         loop = asyncio.get_running_loop()
@@ -134,6 +140,15 @@ def _trigger_match_cache_invalidation_on_publish(
 def _build_property_response(prop: Property, distance: float | None = None) -> PropertyResponse:
     """Map ORM Property to PropertyResponse."""
     lat, lon = _extract_lat_lon(prop)
+    # Photos may not be loaded (e.g. freshly created property). Only serialize
+    # them when the relationship is already populated, avoiding an async
+    # lazy-load (MissingGreenlet) on unloaded collections.
+    photos_loaded = inspect(prop).attrs.photos.loaded_value
+    photos = (
+        [PropertyPhotoResponse.model_validate(p) for p in photos_loaded]
+        if isinstance(photos_loaded, list)
+        else []
+    )
     return PropertyResponse(
         id=prop.id,
         type=prop.type,
@@ -156,7 +171,7 @@ def _build_property_response(prop: Property, distance: float | None = None) -> P
         updated_at=prop.updated_at,
         published_at=prop.published_at,
         distance=distance,
-        photos=[PropertyPhotoResponse.model_validate(p) for p in prop.photos],
+        photos=photos,
     )
 
 
@@ -207,7 +222,6 @@ async def create_property(
     )
     session.add(prop)
     await session.flush()
-    await session.refresh(prop)
 
     log.info("property_created", property_id=str(prop.id), user_id=str(user.id))
 
@@ -418,7 +432,6 @@ async def update_property(
             setattr(prop, field, value)
 
     await session.flush()
-    await session.refresh(prop)
 
     log.info("property_updated", property_id=str(property_id), user_id=str(user.id))
     return _build_property_response(prop)
@@ -490,7 +503,6 @@ async def update_property_status(
 
     prop.status = new_status.value
     await session.flush()
-    await session.refresh(prop)
 
     # ── Match cache invalidation trigger ─────────────────────────────────────
     # When a property is published (ACTIVE), all buyer matches may be affected.
@@ -572,7 +584,6 @@ async def upload_photo(
     )
     session.add(photo)
     await session.flush()
-    await session.refresh(photo)
 
     log.info("property_photo_uploaded", photo_id=str(photo_id), property_id=str(property_id))
 
