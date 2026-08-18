@@ -48,6 +48,8 @@ export default function RegisterPage() {
     confirmPassword: '',
     phone: '',
     company: '',
+    license: '',
+    agency_name: '',
     budget_min: '',
     budget_max: '',
     preferred_locations: '',
@@ -132,6 +134,8 @@ export default function RegisterPage() {
         ...(formData.role === 'buyer' && formData.preferred_locations && {
           preferred_locations: formData.preferred_locations.split(',').map(s => s.trim())
         }),
+        ...(formData.role === 'agent' && formData.license && { license_number: formData.license.trim() }),
+        ...(formData.role === 'agent' && formData.agency_name && { agency_name: formData.agency_name.trim() }),
         consent_given_at: new Date().toISOString(),
       };
 
@@ -333,12 +337,21 @@ export default function RegisterPage() {
 
                 {/* Agent: License */}
                 {formData.role === 'agent' && (
-                  <Input
-                    label="Número de licencia"
-                    placeholder="Tu número de licencia profesional"
-                    value={formData.license}
-                    onChange={(e) => handleChange('license', e.target.value)}
-                  />
+                  <>
+                    <Input
+                      label="Número de licencia"
+                      placeholder="Tu número de licencia profesional"
+                      value={formData.license}
+                      onChange={(e) => handleChange('license', e.target.value)}
+                    />
+                    <Input
+                      label="Inmobiliaria (opcional)"
+                      placeholder="Nombre de tu inmobiliaria"
+                      value={formData.agency_name}
+                      onChange={(e) => handleChange('agency_name', e.target.value)}
+                      leftIcon={<Building2 className="w-5 h-5" />}
+                    />
+                  </>
                 )}
 
                 {/* Terms Checkbox */}

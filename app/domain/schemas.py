@@ -81,6 +81,48 @@ class UserProfile(BaseModel):
     password_changed_at: datetime | None = None
 
 
+# ── Registration schemas ───────────────────────────────────────────────────────
+
+
+class RegisterRequest(BaseModel):
+    """POST /api/v1/auth/register request body."""
+
+    username: Annotated[str, Field(min_length=3, max_length=255)]
+    email: Annotated[str, Field(min_length=1, max_length=255)]
+    password: Annotated[str, Field(min_length=8, max_length=128)]
+    role: Annotated[str, Field(min_length=1, max_length=50)]
+    # Seller profile fields
+    phone: str | None = None
+    company_name: str | None = None
+    # Buyer profile fields
+    budget_min: float | None = None
+    budget_max: float | None = None
+    preferred_locations: list[str] | None = None
+    # Agent profile fields
+    license_number: str | None = None
+    agency_name: str | None = None
+
+
+class RegisterUserResponse(BaseModel):
+    """User payload returned by registration."""
+
+    id: uuid.UUID
+    username: str
+    email: str
+    role_id: uuid.UUID
+    roles: list[str]
+
+
+class RegisterResponse(BaseModel):
+    """POST /api/v1/auth/register response."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    token_type: str = "Bearer"
+    user: RegisterUserResponse
+
+
 # ── Password policy schemas ────────────────────────────────────────────────────
 
 

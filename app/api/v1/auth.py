@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +31,7 @@ from app.core.exceptions import (
     InvalidCredentialsError,
     InvalidTokenError,
     PasswordExpiredError,
+    PasswordPolicyError,
     TokenExpiredError,
     TokenRevokedError,
 )
@@ -43,7 +44,16 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
-from app.domain.models import AuditLog, LoginAttempt, PasswordReset, User
+from app.domain.models import (
+    AgentProfile,
+    AuditLog,
+    BuyerProfile,
+    LoginAttempt,
+    PasswordReset,
+    Role,
+    SellerProfile,
+    User,
+)
 from app.domain.schemas import (
     ErrorResponse,
     ForgotPasswordRequest,
@@ -51,6 +61,9 @@ from app.domain.schemas import (
     LoginRequest,
     RefreshRequest,
     RefreshResponse,
+    RegisterRequest,
+    RegisterResponse,
+    RegisterUserResponse,
     ResetPasswordRequest,
     ResetPasswordResponse,
     TokenResponse,
@@ -92,6 +105,180 @@ async def _audit_log(
         await session.commit()
     except Exception as exc:
         log.warning("audit_log_write_failed", action=action, error=str(exc))
+
+
+# ── POST /api/v1/auth/register ─────────────────────────────────────────────────
+
+
+@router.post(
+    "/register",
+    response_model=RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid role, missing license, or password policy violation"},
+        409: {"model": ErrorResponse, "description": "Username or email already registered"},
+    },
+)
+async def register(
+    request: Request,
+    body: RegisterRequest,
+    session: AsyncSession = Depends(get_db),
+) -> RegisterResponse:
+    """Register a new user (buyer, seller, or agent) and issue tokens.
+
+    Flow:
+    1. Validate role is one of buyer/seller/agent
+    2. Check username/email uniqueness
+    3. Hash password (validates policy)
+    4. Create user + role assignment
+    5. Create role-specific profile
+    6. Issue access/refresh tokens and store refresh in Redis
+    7. Audit log
+    """
+    ip = _get_client_ip(request)
+    tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+    allowed_roles = {"buyer", "seller", "agent"}
+    if body.role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role",
+            headers={"error_code": "AUTH_INVALID_ROLE"},
+        )
+
+    email = body.email.lower().strip()
+
+    # Uniqueness check (username is CITEXT; email is case-folded explicitly)
+    existing = await session.execute(
+        select(User).where(
+            or_(User.username == body.username, User.email == email)
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email is already registered",
+            headers={"error_code": "AUTH_USER_EXISTS"},
+        )
+
+    # Agent registration requires a license number (nullable=False in the model)
+    if body.role == "agent" and not body.license_number:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Agent license number is required",
+            headers={"error_code": "AUTH_AGENT_LICENSE_REQUIRED"},
+        )
+
+    # Hash password (raises PasswordPolicyError if it violates policy)
+    try:
+        password_hash = hash_password(body.password)
+    except PasswordPolicyError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password policy violation",
+            headers={"error_code": "AUTH_PASSWORD_POLICY_VIOLATION"},
+        )
+
+    # Look up the role row
+    role_result = await session.execute(select(Role).where(Role.name == body.role))
+    role = role_result.scalar_one_or_none()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role configuration error",
+            headers={"error_code": "AUTH_ROLE_MISSING"},
+        )
+
+    # Create user + role assignment
+    user = User(
+        username=body.username,
+        email=email,
+        password_hash=password_hash,
+        tenant_id=tenant_id,
+        is_active=True,
+        consent_given_at=datetime.now(timezone.utc),
+    )
+    user.roles.append(role)
+    session.add(user)
+    await session.flush()  # populate user.id for profile + tokens
+
+    # Create role-specific profile
+    if body.role == "buyer":
+        session.add(
+            BuyerProfile(
+                user_id=user.id,
+                budget_min=body.budget_min,
+                budget_max=body.budget_max,
+                preferred_locations=body.preferred_locations or [],
+            )
+        )
+    elif body.role == "seller":
+        session.add(
+            SellerProfile(
+                user_id=user.id,
+                phone=body.phone,
+                company_name=body.company_name,
+            )
+        )
+    elif body.role == "agent":
+        session.add(
+            AgentProfile(
+                user_id=user.id,
+                license_number=body.license_number,
+                agency_name=body.agency_name,
+            )
+        )
+
+    await session.commit()
+
+    # Issue tokens (mirrors login)
+    jti = str(uuid.uuid4())
+    refresh_jti = str(uuid.uuid4())
+
+    access_token = create_access_token(
+        user_id=user.id,
+        tenant_id=tenant_id,
+        roles=[role.name],
+        jti=jti,
+    )
+    refresh_token = create_refresh_token(
+        user_id=user.id,
+        tenant_id=tenant_id,
+        jti=refresh_jti,
+    )
+
+    refresh_ttl_seconds = settings.refresh_token_expire_days * 24 * 60 * 60
+    await store_refresh_token(str(user.id), refresh_jti, refresh_ttl_seconds)
+    await touch_last_active(
+        str(user.id),
+        ttl_seconds=settings.inactivity_timeout_minutes * 60,
+    )
+
+    # Audit log
+    await _audit_log(
+        session=session,
+        action="register",
+        user_id=user.id,
+        tenant_id=tenant_id,
+        ip_address=ip,
+        details={"role": body.role},
+    )
+
+    log.info("register_success", user_id=str(user.id), role=body.role)
+
+    return RegisterResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.access_token_expire_minutes * 60,
+        token_type="Bearer",
+        user=RegisterUserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            role_id=role.id,
+            roles=[role.name],
+        ),
+    )
 
 
 # ── POST /api/v1/auth/login ────────────────────────────────────────────────────
