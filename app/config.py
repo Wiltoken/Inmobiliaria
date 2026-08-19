@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -154,3 +155,9 @@ def get_settings() -> AuthSettings:
 
 # Convenience alias
 settings = get_settings()
+
+
+# Default tenant for single-tenant deployments (zero UUID).
+# Shared by login, registration, and the seed script so all auth/demo data
+# lives in one tenant.
+DEFAULT_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")

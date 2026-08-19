@@ -17,6 +17,7 @@ from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.database import get_engine, get_session_maker
+from app.config import DEFAULT_TENANT_ID
 from app.domain.models import (
     AgentProfile,
     Base,
@@ -116,10 +117,10 @@ LAST_NAMES = [
 ]
 
 
-def random_features() -> list[str]:
-    """Pick 3-8 random features."""
+def random_features() -> dict[str, bool]:
+    """Pick 3-8 random features as a {feature: True} map."""
     n = random.randint(3, 8)
-    return random.sample(PROPERTY_FEATURES, n)
+    return {feature: True for feature in random.sample(PROPERTY_FEATURES, n)}
 
 
 def random_location(city: str) -> tuple[float, float]:
@@ -150,7 +151,7 @@ async def seed(session: AsyncSession):
         username="admin",
         email="admin@inmobiliaria.com",
         password_hash=pwd_context.hash("Admin123!"),
-        tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        tenant_id=DEFAULT_TENANT_ID,
         is_active=True,
         consent_given_at=datetime.now(timezone.utc),
     )
@@ -164,10 +165,11 @@ async def seed(session: AsyncSession):
     agencies = ["Inmobiliaria Prime", "Hogar Colombia", "Fincaraíz Pro"]
     for i in range(3):
         user = User(
+            id=uuid.uuid4(),
             username=f"agent{i+1}",
             email=f"agent{i+1}@inmobiliaria.com",
             password_hash=pwd_context.hash("Agent123!"),
-            tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+            tenant_id=DEFAULT_TENANT_ID,
             is_active=True,
             consent_given_at=datetime.now(timezone.utc),
         )
@@ -190,10 +192,11 @@ async def seed(session: AsyncSession):
         first = random.choice(FIRST_NAMES)
         last = random.choice(LAST_NAMES)
         user = User(
+            id=uuid.uuid4(),
             username=f"seller{i+1}",
             email=f"seller{i+1}@inmobiliaria.com",
             password_hash=pwd_context.hash("Seller123!"),
-            tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+            tenant_id=DEFAULT_TENANT_ID,
             is_active=True,
             consent_given_at=datetime.now(timezone.utc),
         )
@@ -216,10 +219,11 @@ async def seed(session: AsyncSession):
         first = random.choice(FIRST_NAMES)
         last = random.choice(LAST_NAMES)
         user = User(
+            id=uuid.uuid4(),
             username=f"buyer{i+1}",
             email=f"buyer{i+1}@inmobiliaria.com",
             password_hash=pwd_context.hash("Buyer123!"),
-            tenant_id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+            tenant_id=DEFAULT_TENANT_ID,
             is_active=True,
             consent_given_at=datetime.now(timezone.utc),
         )
@@ -260,6 +264,8 @@ async def seed(session: AsyncSession):
             PropertyType.OFFICE: (80_000_000, 500_000_000),
             PropertyType.COMMERCIAL: (150_000_000, 1_200_000_000),
             PropertyType.LAND: (50_000_000, 3_000_000_000),
+            PropertyType.WAREHOUSE: (200_000_000, 2_000_000_000),
+            PropertyType.ROOM: (30_000_000, 150_000_000),
         }
         price_min, price_max = price_ranges[prop_type]
         price = round(random.randint(price_min, price_max) / 1_000_000) * 1_000_000
@@ -267,9 +273,7 @@ async def seed(session: AsyncSession):
         status = random.choice([PropertyStatus.ACTIVE, PropertyStatus.ACTIVE, PropertyStatus.ACTIVE, PropertyStatus.PENDING])
 
         lat, lon = random_location(city_name)
-        from geoalchemy2.shape import from_shape
-        from shapely.geometry import Point
-        location = from_shape(Point(lon, lat), srid=4326)
+        location = {"type": "Point", "coordinates": [lon, lat]}
 
         title_template = random.choice(PROPERTY_TITLES.get(prop_type, ["Propiedad en {neighborhood}"]))
         title = title_template.format(neighborhood=neighborhood)
@@ -278,6 +282,7 @@ async def seed(session: AsyncSession):
         agent = random.choice(agents) if random.random() > 0.5 else None
 
         prop = Property(
+            id=uuid.uuid4(),
             type=prop_type,
             operation=operation,
             status=status,
