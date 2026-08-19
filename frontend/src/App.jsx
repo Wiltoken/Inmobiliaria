@@ -12,6 +12,7 @@ import SearchPage from './pages/SearchPage';
 import PropertyDetailPage from './pages/PropertyDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminPropertiesPage from './pages/AdminPropertiesPage';
 import BIDashboard from './components/analytics/BIDashboard';
 
 function AppRoutes() {
@@ -92,6 +93,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
               <AdminUsersPage onPageView={trackPageView} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/properties"
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
+              <AdminPropertiesPage onPageView={trackPageView} />
             </ProtectedRoute>
           }
         />

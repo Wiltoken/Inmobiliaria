@@ -196,6 +196,8 @@ async def register(
         username=body.username,
         email=email,
         full_name=body.full_name,
+        document_type=body.document_type,
+        document_number=body.document_number,
         password_hash=password_hash,
         tenant_id=tenant_id,
         is_active=True,

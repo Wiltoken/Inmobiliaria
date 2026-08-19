@@ -144,6 +144,11 @@ class User(Base):
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    document_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    document_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

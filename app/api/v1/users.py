@@ -76,12 +76,17 @@ async def get_me(
         username=user.username,
         email=user.email,
         full_name=user.full_name,
+        document_type=user.document_type,
+        document_number=user.document_number,
+        is_verified=user.is_verified,
         tenant_id=user.tenant_id,
         roles=[RoleSummary(id=role.id, name=role.name) for role in user.roles],
         is_active=user.is_active,
         is_locked=user.is_locked,
+        locked_until=user.locked_until,
         consent_given_at=user.consent_given_at,
         password_changed_at=user.password_changed_at,
+        created_at=user.created_at,
     )
 
 

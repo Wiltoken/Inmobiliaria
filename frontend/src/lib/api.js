@@ -157,6 +157,12 @@ export const adminApi = {
     api.post(`/admin/users/${id}/delete-data`),
   restoreUser: (id) =>
     api.post(`/admin/users/${id}/restore`),
+  properties: (params) =>
+    api.get('/admin/properties', { params }),
+  approveProperty: (id) =>
+    api.patch(`/admin/properties/${id}/approve`),
+  rejectProperty: (id, reason) =>
+    api.patch(`/admin/properties/${id}/reject`, { reason }),
 };
 
 export default api;

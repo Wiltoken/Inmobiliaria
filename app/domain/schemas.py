@@ -101,12 +101,17 @@ class UserProfile(BaseModel):
     username: str
     email: str
     full_name: str | None = None
+    document_type: str | None = None
+    document_number: str | None = None
+    is_verified: bool = False
     tenant_id: uuid.UUID
     roles: list[RoleSummary]
     is_active: bool
     is_locked: bool
+    locked_until: datetime | None = None
     consent_given_at: datetime | None = None
     password_changed_at: datetime | None = None
+    created_at: datetime | None = None
     deleted_at: datetime | None = None
 
 
@@ -119,6 +124,8 @@ class RegisterRequest(BaseModel):
     username: Annotated[str, Field(min_length=3, max_length=255)]
     email: Annotated[str, Field(min_length=1, max_length=255)]
     full_name: str | None = None
+    document_type: str | None = None
+    document_number: str | None = None
     password: Annotated[str, Field(min_length=8, max_length=128)]
     role: Annotated[str, Field(min_length=1, max_length=50)]
     # Seller profile fields
@@ -223,6 +230,9 @@ class AdminUserCreate(BaseModel):
     username: Annotated[str, Field(min_length=3, max_length=255)]
     email: Annotated[str, Field(min_length=1, max_length=255)]
     full_name: str | None = None
+    document_type: str | None = None
+    document_number: str | None = None
+    is_verified: bool = False
     password: Annotated[str, Field(min_length=8, max_length=128)]
     role: Annotated[str, Field(min_length=1, max_length=50)]
     is_active: bool = True
@@ -233,6 +243,9 @@ class AdminUserUpdate(BaseModel):
 
     email: str | None = None
     full_name: str | None = None
+    document_type: str | None = None
+    document_number: str | None = None
+    is_verified: bool | None = None
     is_active: bool | None = None
     is_locked: bool | None = None
     roles: list[str] | None = None

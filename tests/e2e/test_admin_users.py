@@ -111,6 +111,29 @@ class TestAdminUserCRUD:
         assert data["roles"][0]["name"] == "agent"
 
     @pytest.mark.asyncio
+    async def test_create_user_with_document(self, admin_client: AsyncClient) -> None:
+        token = await _admin_token(admin_client)
+        resp = await admin_client.post(
+            "/api/v1/admin/users",
+            json={
+                "username": "concedula",
+                "email": "concedula@test.com",
+                "full_name": "Con Cédula",
+                "document_type": "CC",
+                "document_number": "123456789",
+                "is_verified": True,
+                "password": "Cedula123!",
+                "role": "seller",
+            },
+            headers=_headers(token),
+        )
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["document_type"] == "CC"
+        assert data["document_number"] == "123456789"
+        assert data["is_verified"] is True
+
+    @pytest.mark.asyncio
     async def test_create_user_duplicate_username(self, admin_client: AsyncClient) -> None:
         token = await _admin_token(admin_client)
         payload = {
@@ -163,7 +186,7 @@ class TestAdminUserCRUD:
         user_id = list_resp.json()["users"][0]["id"]
         resp = await admin_client.get(f"/api/v1/admin/users/{user_id}", headers=_headers(token))
         assert resp.status_code == 200
-        assert resp.json()["id"] == user_id
+        assert resp.json()["user"]["id"] == user_id
 
     @pytest.mark.asyncio
     async def test_get_user_not_found(self, admin_client: AsyncClient) -> None:

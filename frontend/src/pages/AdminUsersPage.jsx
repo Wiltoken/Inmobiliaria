@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Pencil, Trash2, RotateCcw, X, Users as UsersIcon } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, RotateCcw, X, Users as UsersIcon, Eye, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { adminApi } from '../lib/api';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -17,6 +17,13 @@ const ROLE_LABELS = {
 
 const ROLE_OPTIONS = ['buyer', 'seller', 'agent', 'admin', 'super_admin'];
 
+const DOCUMENT_TYPES = [
+  { value: 'CC', label: 'Cédula de Ciudadanía' },
+  { value: 'CE', label: 'Cédula de Extranjería' },
+  { value: 'PAS', label: 'Pasaporte' },
+  { value: 'NIT', label: 'NIT' },
+];
+
 const EMPTY_FORM = {
   username: '',
   email: '',
@@ -24,6 +31,9 @@ const EMPTY_FORM = {
   password: '',
   role: 'buyer',
   is_active: true,
+  document_type: '',
+  document_number: '',
+  is_verified: false,
 };
 
 function userStatus(user) {
@@ -31,6 +41,15 @@ function userStatus(user) {
   if (!user.is_active) return { label: 'Inactivo', variant: 'warning' };
   if (user.is_locked) return { label: 'Bloqueado', variant: 'warning' };
   return { label: 'Activo', variant: 'success' };
+}
+
+function formatCop(value) {
+  if (value == null) return '—';
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 export default function AdminUsersPage({ onPageView }) {
@@ -47,6 +66,8 @@ export default function AdminUsersPage({ onPageView }) {
   const [editingUser, setEditingUser] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [detailUser, setDetailUser] = useState(null);
+  const [detailProfile, setDetailProfile] = useState(null);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -86,8 +107,21 @@ export default function AdminUsersPage({ onPageView }) {
       password: '',
       role: user.roles?.[0]?.name || 'buyer',
       is_active: user.is_active,
+      document_type: user.document_type || '',
+      document_number: user.document_number || '',
+      is_verified: user.is_verified || false,
     });
     setModalOpen(true);
+  };
+
+  const handleViewDetail = async (user) => {
+    try {
+      const res = await adminApi.getUser(user.id);
+      setDetailUser(res.data.user);
+      setDetailProfile(res.data.profile);
+    } catch (e) {
+      toast.error('Error al cargar el detalle del usuario');
+    }
   };
 
   const handleSave = async (e) => {
@@ -100,6 +134,9 @@ export default function AdminUsersPage({ onPageView }) {
           full_name: form.full_name,
           roles: form.role ? [form.role] : [],
           is_active: form.is_active,
+          document_type: form.document_type || null,
+          document_number: form.document_number || null,
+          is_verified: form.is_verified,
         });
         toast.success('Usuario actualizado');
       } else {
@@ -110,6 +147,9 @@ export default function AdminUsersPage({ onPageView }) {
           password: form.password,
           role: form.role,
           is_active: form.is_active,
+          document_type: form.document_type || null,
+          document_number: form.document_number || null,
+          is_verified: form.is_verified,
         });
         toast.success('Usuario creado');
       }
@@ -251,6 +291,9 @@ export default function AdminUsersPage({ onPageView }) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleViewDetail(user)}>
+                            <Eye className="w-4 h-4" /> Ver
+                          </Button>
                           {user.deleted_at ? (
                             <Button variant="ghost" size="sm" onClick={() => handleRestore(user)}>
                               <RotateCcw className="w-4 h-4" /> Restaurar
@@ -353,6 +396,36 @@ export default function AdminUsersPage({ onPageView }) {
                 value={form.full_name}
                 onChange={(e) => setField('full_name', e.target.value)}
               />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de documento</label>
+                  <select
+                    value={form.document_type}
+                    onChange={(e) => setField('document_type', e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  >
+                    <option value="">Sin especificar</option>
+                    {DOCUMENT_TYPES.map((d) => (
+                      <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input
+                  label="Número de documento"
+                  placeholder="Ej: 123456789"
+                  value={form.document_number}
+                  onChange={(e) => setField('document_number', e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.is_verified}
+                  onChange={(e) => setField('is_verified', e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <span className="text-sm text-gray-700">Identidad verificada</span>
+              </label>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
                 <select
@@ -384,6 +457,191 @@ export default function AdminUsersPage({ onPageView }) {
                 </Button>
               </div>
             </form>
+          </Card>
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {detailUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => { setDetailUser(null); setDetailProfile(null); }}
+          />
+          <Card className="relative w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-primary font-bold text-lg">
+                    {(detailUser.full_name || detailUser.username).charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {detailUser.full_name || detailUser.username}
+                  </h2>
+                  <p className="text-sm text-gray-500">@{detailUser.username}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setDetailUser(null); setDetailProfile(null); }}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 mb-4">
+              {detailUser.is_verified ? (
+                <Badge variant="success"><BadgeCheck className="w-3 h-3" /> Verificado</Badge>
+              ) : (
+                <Badge variant="warning">Sin verificar</Badge>
+              )}
+              <Badge variant={userStatus(detailUser).variant}>{userStatus(detailUser).label}</Badge>
+            </div>
+
+            <div className="space-y-4">
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                  <ShieldCheck className="w-4 h-4" /> Identificación
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Tipo</p>
+                    <p className="font-medium">{detailUser.document_type || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Número</p>
+                    <p className="font-medium">{detailUser.document_number || '—'}</p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Cuenta</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Email</p>
+                    <p className="font-medium break-all">{detailUser.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Roles</p>
+                    <div className="flex flex-wrap gap-1">
+                      {detailUser.roles?.map((r) => (
+                        <Badge key={r.id} variant="primary" size="sm">{ROLE_LABELS[r.name] || r.name}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Creado</p>
+                    <p className="font-medium">
+                      {detailUser.created_at ? new Date(detailUser.created_at).toLocaleDateString('es-CO') : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">ID</p>
+                    <p className="font-medium text-xs break-all">{detailUser.id}</p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Compliance (Ley 1581)</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Consentimiento</p>
+                    <p className="font-medium">
+                      {detailUser.consent_given_at ? new Date(detailUser.consent_given_at).toLocaleDateString('es-CO') : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Último cambio de contraseña</p>
+                    <p className="font-medium">
+                      {detailUser.password_changed_at ? new Date(detailUser.password_changed_at).toLocaleDateString('es-CO') : '—'}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {detailProfile && (
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                    Perfil ({ROLE_LABELS[detailProfile.type] || detailProfile.type})
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {detailProfile.type === 'buyer' && (
+                      <>
+                        <div>
+                          <p className="text-gray-500">Presupuesto</p>
+                          <p className="font-medium">{formatCop(detailProfile.budget_min)} — {formatCop(detailProfile.budget_max)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Ubicaciones</p>
+                          <p className="font-medium">
+                            {(detailProfile.preferred_locations || [])
+                              .map((l) => (typeof l === 'string' ? l : l?.city))
+                              .filter(Boolean)
+                              .join(', ') || '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Habitaciones mín.</p>
+                          <p className="font-medium">{detailProfile.rooms_min ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Área</p>
+                          <p className="font-medium">{detailProfile.area_min ?? '—'} – {detailProfile.area_max ?? '—'} m²</p>
+                        </div>
+                      </>
+                    )}
+                    {detailProfile.type === 'seller' && (
+                      <>
+                        <div>
+                          <p className="text-gray-500">Teléfono</p>
+                          <p className="font-medium">{detailProfile.phone || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Empresa</p>
+                          <p className="font-medium">{detailProfile.company_name || '—'}</p>
+                        </div>
+                      </>
+                    )}
+                    {detailProfile.type === 'agent' && (
+                      <>
+                        <div>
+                          <p className="text-gray-500">Licencia</p>
+                          <p className="font-medium">{detailProfile.license_number || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">Agencia</p>
+                          <p className="font-medium">{detailProfile.agency_name || '—'}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                {!detailUser.deleted_at && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { openEdit(detailUser); setDetailUser(null); setDetailProfile(null); }}
+                  >
+                    <Pencil className="w-4 h-4" /> Editar
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  fullWidth
+                  onClick={() => { setDetailUser(null); setDetailProfile(null); }}
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
           </Card>
         </div>
       )}

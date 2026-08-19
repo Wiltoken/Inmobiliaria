@@ -87,12 +87,17 @@ def _user_profile(user: User) -> UserProfile:
         username=user.username,
         email=user.email,
         full_name=user.full_name,
+        document_type=user.document_type,
+        document_number=user.document_number,
+        is_verified=user.is_verified,
         tenant_id=user.tenant_id,
         roles=[RoleSummary(id=role.id, name=role.name) for role in user.roles],
         is_active=user.is_active,
         is_locked=user.is_locked,
+        locked_until=user.locked_until,
         consent_given_at=user.consent_given_at,
         password_changed_at=user.password_changed_at,
+        created_at=user.created_at,
         deleted_at=user.deleted_at,
     )
 
@@ -179,9 +184,16 @@ async def list_users(
 # ── GET /api/v1/admin/users/{user_id} ───────────────────────────────────────────
 
 
+class AdminUserDetailResponse(BaseModel):
+    """GET /api/v1/admin/users/{user_id} response — user + role-specific profile."""
+
+    user: UserProfile
+    profile: dict | None = None
+
+
 @router.get(
     "/users/{user_id}",
-    response_model=UserProfile,
+    response_model=AdminUserDetailResponse,
     responses={
         401: {"model": ErrorResponse, "description": "Not authenticated"},
         403: {"model": ErrorResponse, "description": "Insufficient permissions"},
@@ -192,13 +204,20 @@ async def get_user(
     user_id: uuid.UUID,
     user: User = Depends(require_role("admin", "super_admin")),
     session: AsyncSession = Depends(get_db),
-) -> UserProfile:
-    """Return a single user with roles.
+) -> AdminUserDetailResponse:
+    """Return a single user with roles and their role-specific profile.
 
     Requires admin or super_admin role.
     """
     result = await session.execute(
-        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+        select(User)
+        .options(
+            selectinload(User.roles),
+            selectinload(User.buyer_profile),
+            selectinload(User.seller_profile),
+            selectinload(User.agent_profile),
+        )
+        .where(User.id == user_id)
     )
     target = result.scalar_one_or_none()
     if target is None:
@@ -206,7 +225,38 @@ async def get_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-    return _user_profile(target)
+
+    profile = None
+    if target.buyer_profile is not None:
+        bp = target.buyer_profile
+        profile = {
+            "type": "buyer",
+            "budget_min": bp.budget_min,
+            "budget_max": bp.budget_max,
+            "preferred_locations": bp.preferred_locations,
+            "rooms_min": bp.rooms_min,
+            "bathrooms_min": bp.bathrooms_min,
+            "area_min": bp.area_min,
+            "area_max": bp.area_max,
+            "preferred_features": bp.preferred_features,
+            "preferred_property_types": bp.preferred_property_types,
+        }
+    elif target.seller_profile is not None:
+        sp = target.seller_profile
+        profile = {
+            "type": "seller",
+            "phone": sp.phone,
+            "company_name": sp.company_name,
+        }
+    elif target.agent_profile is not None:
+        ap = target.agent_profile
+        profile = {
+            "type": "agent",
+            "license_number": ap.license_number,
+            "agency_name": ap.agency_name,
+        }
+
+    return AdminUserDetailResponse(user=_user_profile(target), profile=profile)
 
 
 # ── POST /api/v1/admin/users ────────────────────────────────────────────────────
@@ -267,6 +317,9 @@ async def create_user(
         username=body.username,
         email=email,
         full_name=body.full_name,
+        document_type=body.document_type,
+        document_number=body.document_number,
+        is_verified=body.is_verified,
         password_hash=password_hash,
         tenant_id=DEFAULT_TENANT_ID,
         is_active=body.is_active,
@@ -333,6 +386,12 @@ async def update_user(
         target.email = body.email.lower().strip()
     if body.full_name is not None:
         target.full_name = body.full_name
+    if body.document_type is not None:
+        target.document_type = body.document_type
+    if body.document_number is not None:
+        target.document_number = body.document_number
+    if body.is_verified is not None:
+        target.is_verified = body.is_verified
     if body.is_active is not None:
         target.is_active = body.is_active
     if body.is_locked is not None:
@@ -544,6 +603,93 @@ async def compliance_report(
         failed_logins_today=failed_logins_today,
         users_without_consent=users_without_consent,
         password_expired_count=password_expired_count,
+    )
+
+
+# ── GET /api/v1/admin/properties ────────────────────────────────────────────────
+
+
+class AdminPropertyListItem(BaseModel):
+    """Property row in the admin moderation list."""
+
+    id: uuid.UUID
+    title: str
+    type: str
+    operation: str
+    status: str
+    price: float
+    owner: dict | None = None
+    rejection_reason: str | None = None
+    published_at: datetime | None = None
+    created_at: datetime
+    photo: str | None = None
+
+
+class AdminPropertiesResponse(BaseModel):
+    """GET /api/v1/admin/properties response (paginated)."""
+
+    properties: list[AdminPropertyListItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+@router.get(
+    "/properties",
+    response_model=AdminPropertiesResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+    },
+)
+async def list_properties(
+    request: Request,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+    status_filter: Annotated[str | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
+    user: User = Depends(require_role("admin", "super_admin")),  # noqa: ARG001 — enforces role
+    session: AsyncSession = Depends(get_db),
+) -> AdminPropertiesResponse:
+    """List all properties for moderation, with optional status filter and search.
+
+    Requires admin or super_admin role.
+    """
+    query = select(Property).options(
+        selectinload(Property.owner), selectinload(Property.photos)
+    )
+    if status_filter:
+        query = query.where(Property.status == status_filter)
+    if search:
+        query = query.where(Property.title.ilike(f"%{search.strip()}%"))
+    query = query.order_by(Property.created_at.desc())
+
+    props, total, total_pages = await _paginate(session, query, page, page_size)
+
+    items = [
+        AdminPropertyListItem(
+            id=prop.id,
+            title=prop.title,
+            type=prop.type,
+            operation=prop.operation,
+            status=prop.status,
+            price=prop.price,
+            owner={"id": str(prop.owner.id), "username": prop.owner.username} if prop.owner else None,
+            rejection_reason=prop.rejection_reason,
+            published_at=prop.published_at,
+            created_at=prop.created_at,
+            photo=prop.photos[0].url if prop.photos else None,
+        )
+        for prop in props
+    ]
+
+    return AdminPropertiesResponse(
+        properties=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
     )
 
 
