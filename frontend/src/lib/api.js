@@ -142,4 +142,21 @@ export const auditApi = {
     api.get('/admin/analytics'),
 };
 
+export const adminApi = {
+  dashboard: () =>
+    api.get('/admin/dashboard'),
+  users: (params) =>
+    api.get('/admin/users', { params }),
+  getUser: (id) =>
+    api.get(`/admin/users/${id}`),
+  createUser: (data) =>
+    api.post('/admin/users', data),
+  updateUser: (id, data) =>
+    api.patch(`/admin/users/${id}`, data),
+  deleteUser: (id) =>
+    api.post(`/admin/users/${id}/delete-data`),
+  restoreUser: (id) =>
+    api.post(`/admin/users/${id}/restore`),
+};
+
 export default api;

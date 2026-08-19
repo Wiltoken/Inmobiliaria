@@ -19,15 +19,19 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_db, require_role
-from app.config import settings
+from app.config import DEFAULT_TENANT_ID, settings
+from app.core.exceptions import PasswordPolicyError
+from app.core.security import hash_password
 from app.domain.models import (
     AgentProfile,
     AuditLog,
     BuyerProfile,
+    Inquiry,
     LoginAttempt,
     PasswordReset,
     Property,
@@ -37,14 +41,18 @@ from app.domain.models import (
     SellerProfile,
     User,
     UserAction,
+    UserRole,
 )
 from app.domain.schemas import (
+    AdminUserCreate,
+    AdminUserUpdate,
     AuditLogEntry,
     ComplianceReport,
     ErrorResponse,
     PaginatedAuditLogsResponse,
     PaginatedUsersResponse,
     PropertyResponse,
+    RoleSummary,
     UserProfile,
 )
 
@@ -72,6 +80,23 @@ async def _paginate(
     return list(items), total, total_pages
 
 
+def _user_profile(user: User) -> UserProfile:
+    """Map a User ORM instance (with roles loaded) to UserProfile."""
+    return UserProfile(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        tenant_id=user.tenant_id,
+        roles=[RoleSummary(id=role.id, name=role.name) for role in user.roles],
+        is_active=user.is_active,
+        is_locked=user.is_locked,
+        consent_given_at=user.consent_given_at,
+        password_changed_at=user.password_changed_at,
+        deleted_at=user.deleted_at,
+    )
+
+
 # ── GET /api/v1/admin/users ─────────────────────────────────────────────────────
 
 
@@ -89,6 +114,8 @@ async def list_users(
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
     tenant_id: uuid.UUID | None = None,
     role: str | None = None,
+    include_deleted: bool = False,
+    search: str | None = None,
     user: User = Depends(require_role("admin", "super_admin")),  # noqa: ARG001 — enforces role
     session: AsyncSession = Depends(get_db),
 ) -> PaginatedUsersResponse:
@@ -99,7 +126,9 @@ async def list_users(
     # Build base query — join User → Role via secondary
     from sqlalchemy.orm import selectinload
 
-    query = select(User).options(selectinload(User.roles)).where(User.deleted_at.is_(None))
+    query = select(User).options(selectinload(User.roles))
+    if not include_deleted:
+        query = query.where(User.deleted_at.is_(None))
     if tenant_id is not None:
         query = query.where(User.tenant_id == tenant_id)
 
@@ -107,24 +136,22 @@ async def list_users(
     if role is not None:
         query = query.join(User.roles).where(User.roles.any(Role.name == role))
 
+    # Case-insensitive search across username/email/full_name
+    if search:
+        pattern = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                User.username.ilike(pattern),
+                User.email.ilike(pattern),
+                User.full_name.ilike(pattern),
+            )
+        )
+
     query = query.order_by(User.created_at.desc())
 
     users, total, total_pages = await _paginate(session, query, page, page_size)
 
-    user_profiles = [
-        UserProfile(
-            id=u.id,
-            username=u.username,
-            email=u.email,
-            tenant_id=u.tenant_id,
-            roles=[role.name for role in u.roles],
-            is_active=u.is_active,
-            is_locked=u.is_locked,
-            consent_given_at=u.consent_given_at,
-            password_changed_at=u.password_changed_at,
-        )
-        for u in users
-    ]
+    user_profiles = [_user_profile(u) for u in users]
 
     # Audit log admin access
     try:
@@ -147,6 +174,205 @@ async def list_users(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+# ── GET /api/v1/admin/users/{user_id} ───────────────────────────────────────────
+
+
+@router.get(
+    "/users/{user_id}",
+    response_model=UserProfile,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": ErrorResponse, "description": "User not found"},
+    },
+)
+async def get_user(
+    user_id: uuid.UUID,
+    user: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    """Return a single user with roles.
+
+    Requires admin or super_admin role.
+    """
+    result = await session.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return _user_profile(target)
+
+
+# ── POST /api/v1/admin/users ────────────────────────────────────────────────────
+
+
+@router.post(
+    "/users",
+    response_model=UserProfile,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid role or password policy violation"},
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        409: {"model": ErrorResponse, "description": "Username or email already registered"},
+    },
+)
+async def create_user(
+    body: AdminUserCreate,
+    request: Request,
+    admin: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    """Create a new user with a single role.
+
+    Requires admin or super_admin role.
+    """
+    role_result = await session.execute(select(Role).where(Role.name == body.role))
+    role = role_result.scalar_one_or_none()
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role",
+            headers={"error_code": "AUTH_INVALID_ROLE"},
+        )
+
+    email = body.email.lower().strip()
+
+    existing = await session.execute(
+        select(User).where(or_(User.username == body.username, User.email == email))
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email is already registered",
+            headers={"error_code": "AUTH_USER_EXISTS"},
+        )
+
+    try:
+        password_hash = hash_password(body.password)
+    except PasswordPolicyError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password policy violation",
+            headers={"error_code": "AUTH_PASSWORD_POLICY_VIOLATION"},
+        )
+
+    new_user = User(
+        username=body.username,
+        email=email,
+        full_name=body.full_name,
+        password_hash=password_hash,
+        tenant_id=DEFAULT_TENANT_ID,
+        is_active=body.is_active,
+        consent_given_at=datetime.now(timezone.utc),
+    )
+    new_user.roles.append(role)
+    session.add(new_user)
+    await session.commit()
+
+    try:
+        audit_entry = AuditLog(
+            user_id=admin.id,
+            tenant_id=admin.tenant_id,
+            action="admin_create_user",
+            ip_address=request.client.host if request.client else None,
+            details={"target_username": body.username, "role": body.role},
+        )
+        session.add(audit_entry)
+        await session.commit()
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_create_user", error=str(exc))
+
+    result = await session.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == new_user.id)
+    )
+    return _user_profile(result.scalar_one())
+
+
+# ── PATCH /api/v1/admin/users/{user_id} ─────────────────────────────────────────
+
+
+@router.patch(
+    "/users/{user_id}",
+    response_model=UserProfile,
+    responses={
+        400: {"model": ErrorResponse, "description": "One or more roles do not exist"},
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+        404: {"model": ErrorResponse, "description": "User not found"},
+    },
+)
+async def update_user(
+    user_id: uuid.UUID,
+    body: AdminUserUpdate,
+    request: Request,
+    admin: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> UserProfile:
+    """Update a user's email, name, active/locked status, or roles.
+
+    Requires admin or super_admin role.
+    """
+    result = await session.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if body.email is not None:
+        target.email = body.email.lower().strip()
+    if body.full_name is not None:
+        target.full_name = body.full_name
+    if body.is_active is not None:
+        target.is_active = body.is_active
+    if body.is_locked is not None:
+        target.is_locked = body.is_locked
+        if body.is_locked:
+            target.locked_until = datetime.now(timezone.utc) + timedelta(
+                minutes=settings.lockout_duration_minutes
+            )
+        else:
+            target.locked_until = None
+
+    if body.roles is not None:
+        roles_result = await session.execute(select(Role).where(Role.name.in_(body.roles)))
+        new_roles = list(roles_result.scalars().all())
+        if len(new_roles) != len(body.roles):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more roles do not exist",
+            )
+        target.roles = new_roles
+
+    await session.commit()
+
+    try:
+        audit_entry = AuditLog(
+            user_id=admin.id,
+            tenant_id=admin.tenant_id,
+            action="admin_update_user",
+            ip_address=request.client.host if request.client else None,
+            details={"target_user_id": str(user_id)},
+        )
+        session.add(audit_entry)
+        await session.commit()
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_update_user", error=str(exc))
+
+    result = await session.execute(
+        select(User).options(selectinload(User.roles)).where(User.id == user_id)
+    )
+    return _user_profile(result.scalar_one())
 
 
 # ── GET /api/v1/admin/audit-logs ───────────────────────────────────────────────
@@ -556,37 +782,32 @@ async def get_analytics(
     )
     inquiries_sent = inquiries_result.scalar_one() or 0
 
-    # Events over time (last 7 days, grouped by date and action)
-    events_result = await session.execute(
-        select(
-            func.date_trunc('day', UserAction.created_at).label('day'),
-            UserAction.action,
-            func.count(),
+    # Events over time (last 7 days) — bucket in Python for cross-DB safety
+    week_actions = (
+        await session.execute(
+            select(UserAction.created_at).where(UserAction.created_at >= week_ago)
         )
-        .where(UserAction.created_at >= week_ago)
-        .group_by('day', UserAction.action)
-        .order_by('day')
-    )
-    events_raw = events_result.all()
-
-    # Build events_over_time as a list of {date, events} per day
+    ).scalars().all()
     events_by_day: dict[str, int] = {}
-    for row in events_raw:
-        day_str = row.day.strftime('%a') if hasattr(row.day, 'strftime') else str(row.day)
-        events_by_day[day_str] = events_by_day.get(day_str, 0) + row.count
-    events_over_time = [{"date": k, "events": v} for k, v in sorted(events_by_day.items())]
-
-    # User roles distribution
-    roles_result = await session.execute(
-        select(User.roles, func.count())
-        .join(User.roles)
-        .group_by(User.roles)
-    )
-    roles_raw = roles_result.all()
-    user_roles = [
-        {"role": r.role.name if hasattr(r.role, 'name') else str(r.roles), "count": cnt}
-        for r, cnt in roles_raw
+    for created in week_actions:
+        if created is None:
+            continue
+        day_str = _WEEKDAYS_ES[created.weekday()]
+        events_by_day[day_str] = events_by_day.get(day_str, 0) + 1
+    events_over_time = [
+        {"date": day, "events": events_by_day.get(day, 0)} for day in _WEEKDAYS_ES
     ]
+
+    # User roles distribution (proper join, distinct users per role)
+    roles_result = await session.execute(
+        select(Role.name, func.count(func.distinct(UserRole.user_id)))
+        .select_from(UserRole)
+        .join(Role, UserRole.role_id == Role.id)
+        .join(User, UserRole.user_id == User.id)
+        .where(User.deleted_at.is_(None))
+        .group_by(Role.name)
+    )
+    user_roles = [{"role": name, "count": cnt} for name, cnt in roles_result.all()]
 
     # Top 10 viewed properties (from user_actions.details.property_id)
     top_props_result = await session.execute(
@@ -605,6 +826,7 @@ async def get_analytics(
     # Recent 50 actions
     recent_result = await session.execute(
         select(UserAction)
+        .options(selectinload(UserAction.user))
         .order_by(UserAction.created_at.desc())
         .limit(50)
     )
@@ -612,10 +834,10 @@ async def get_analytics(
         {
             "action": r.action,
             "user": r.user.username if r.user else "Anonymous",
-            "time": f"{(now - r.created_at).total_seconds() // 60:.0f}m ago",
+            "time": _minutes_ago(now, r.created_at),
             "details": r.details,
         }
-        for r in recent_result.all()
+        for r in recent_result.scalars().all()
     ]
 
     return AnalyticsResponse(
@@ -627,6 +849,132 @@ async def get_analytics(
         user_roles=user_roles,
         top_properties=top_properties,
         recent_actions=recent_actions,
+    )
+
+
+# ── GET /api/v1/admin/dashboard ─────────────────────────────────────────────────
+
+_MONTHS_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+_WEEKDAYS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+
+def _minutes_ago(now: datetime, then: datetime) -> str:
+    """Human-readable 'Xm ago' (SQLite returns naive datetimes, normalize to UTC)."""
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    return f"{(now - then).total_seconds() // 60:.0f}m ago"
+
+
+def _registrations_last_6_months(created_values: list[datetime], now: datetime) -> list[dict]:
+    """Bucket user creation timestamps into the last 6 months (cross-DB safe)."""
+    result: list[dict] = []
+    for i in range(5, -1, -1):
+        total_months = now.year * 12 + (now.month - 1) - i
+        year = total_months // 12
+        month = total_months % 12 + 1
+        count = sum(1 for c in created_values if c is not None and c.year == year and c.month == month)
+        result.append({"month": _MONTHS_ES[month - 1], "users": count})
+    return result
+
+
+class AdminDashboardResponse(BaseModel):
+    """GET /api/v1/admin/dashboard response — aggregate platform stats."""
+
+    total_users: int = Field(description="Total non-deleted users")
+    total_properties: int = Field(description="Total properties")
+    total_inquiries: int = Field(description="Total inquiries")
+    role_distribution: list[dict] = Field(description="User count by role")
+    registrations_per_month: list[dict] = Field(description="New users per month, last 6 months")
+    pending_properties: list[dict] = Field(description="Properties pending approval")
+
+
+@router.get(
+    "/dashboard",
+    response_model=AdminDashboardResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Not authenticated"},
+        403: {"model": ErrorResponse, "description": "Insufficient permissions"},
+    },
+)
+async def admin_dashboard(
+    request: Request,
+    user: User = Depends(require_role("admin", "super_admin")),
+    session: AsyncSession = Depends(get_db),
+) -> AdminDashboardResponse:
+    """Aggregate platform stats for the admin dashboard.
+
+    Requires admin or super_admin role.
+    """
+    # Totals
+    total_users = (
+        await session.execute(
+            select(func.count()).select_from(User).where(User.deleted_at.is_(None))
+        )
+    ).scalar_one() or 0
+    total_properties = (
+        await session.execute(select(func.count()).select_from(Property))
+    ).scalar_one() or 0
+    total_inquiries = (
+        await session.execute(select(func.count()).select_from(Inquiry))
+    ).scalar_one() or 0
+
+    # Role distribution (non-deleted users, distinct per role)
+    roles_result = await session.execute(
+        select(Role.name, func.count(func.distinct(UserRole.user_id)))
+        .select_from(UserRole)
+        .join(Role, UserRole.role_id == Role.id)
+        .join(User, UserRole.user_id == User.id)
+        .where(User.deleted_at.is_(None))
+        .group_by(Role.name)
+    )
+    role_distribution = [{"role": name, "count": cnt} for name, cnt in roles_result.all()]
+
+    # Registrations per month (last 6 months, bucketed in Python for cross-DB)
+    created_values = (
+        await session.execute(select(User.created_at).where(User.deleted_at.is_(None)))
+    ).scalars().all()
+    registrations_per_month = _registrations_last_6_months(
+        list(created_values), datetime.now(timezone.utc)
+    )
+
+    # Pending properties
+    pending_result = await session.execute(
+        select(Property)
+        .options(selectinload(Property.photos), selectinload(Property.owner))
+        .where(Property.status == PropertyStatus.PENDING.value)
+        .order_by(Property.created_at.desc())
+    )
+    pending_properties = [
+        {
+            "id": str(prop.id),
+            "title": prop.title,
+            "owner": {"username": prop.owner.username} if prop.owner else None,
+            "photos": [{"url": photo.url} for photo in (prop.photos or [])],
+        }
+        for prop in pending_result.scalars().all()
+    ]
+
+    # Audit log admin access
+    try:
+        audit_entry = AuditLog(
+            user_id=user.id,
+            tenant_id=user.tenant_id,
+            action="admin_dashboard_view",
+            ip_address=request.client.host if request.client else None,
+            details={},
+        )
+        session.add(audit_entry)
+        await session.commit()
+    except Exception as exc:
+        log.warning("audit_log_write_failed", action="admin_dashboard_view", error=str(exc))
+
+    return AdminDashboardResponse(
+        total_users=total_users,
+        total_properties=total_properties,
+        total_inquiries=total_inquiries,
+        role_distribution=role_distribution,
+        registrations_per_month=registrations_per_month,
+        pending_properties=pending_properties,
     )
 
 

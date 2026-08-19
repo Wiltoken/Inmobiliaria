@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { matchesApi, propertiesApi, favoritesApi } from '../lib/api';
+import { matchesApi, propertiesApi, favoritesApi, adminApi } from '../lib/api';
 import BuyerDashboard from '../components/dashboard/BuyerDashboard';
 import SellerDashboard from '../components/dashboard/SellerDashboard';
 import AgentDashboard from '../components/dashboard/AgentDashboard';
@@ -66,26 +66,17 @@ export default function DashboardPage({ onPageView }) {
           stats: { activeListings: 15, totalClients: 42, matchesGenerated: 28, inquiriesReceived: 67 },
         });
       } else if (isAdmin()) {
+        const response = await adminApi.dashboard();
+        const d = response.data;
         setData({
-          stats: { totalUsers: 707, totalProperties: 156, totalInquiries: 342 },
-          registrationData: [
-            { month: 'Ene', users: 45 },
-            { month: 'Feb', users: 52 },
-            { month: 'Mar', users: 48 },
-            { month: 'Abr', users: 61 },
-            { month: 'May', users: 55 },
-            { month: 'Jun', users: 68 },
-          ],
-          roleDistribution: [
-            { role: 'Comprador', count: 450 },
-            { role: 'Vendedor', count: 180 },
-            { role: 'Agente', count: 65 },
-            { role: 'Admin', count: 12 },
-          ],
-          pendingProperties: [
-            { id: '1', title: 'Apartamento en Medellín', owner: { username: 'vendedor1' }, photos: [] },
-            { id: '2', title: 'Casa en Bogotá', owner: { username: 'vendedor2' }, photos: [] },
-          ],
+          stats: {
+            totalUsers: d.total_users,
+            totalProperties: d.total_properties,
+            totalInquiries: d.total_inquiries,
+          },
+          registrationData: d.registrations_per_month || [],
+          roleDistribution: d.role_distribution || [],
+          pendingProperties: d.pending_properties || [],
         });
       }
     } catch (error) {
