@@ -74,6 +74,7 @@ def _buyer_payload(**overrides) -> dict:
     payload = {
         "username": "comprador1",
         "email": "comprador1@example.com",
+        "full_name": "Comprador Uno",
         "password": "Comprador123!",
         "role": "buyer",
         "budget_min": 200_000_000,
@@ -97,20 +98,27 @@ class TestRegister:
         assert "refresh_token" in data
         assert data["token_type"] == "Bearer"
         assert data["expires_in"] > 0
-        assert data["user"]["roles"] == ["buyer"]
+        assert data["user"]["roles"][0]["name"] == "buyer"
         assert data["user"]["role_id"]
+        assert data["user"]["full_name"] == "Comprador Uno"
 
         # Buyer profile was created
         from sqlalchemy import select
 
         from app.adapters.database import get_session_maker
-        from app.domain.models import BuyerProfile
+        from app.domain.models import BuyerProfile, User
 
         async with get_session_maker()() as session:
             result = await session.execute(select(BuyerProfile))
             profile = result.scalar_one()
             assert profile.budget_min == 200_000_000
-            assert profile.preferred_locations == ["Chapinero", "Poblado"]
+            assert profile.preferred_locations == [
+                {"city": "Chapinero", "lat": None, "lon": None, "radius_km": 5.0},
+                {"city": "Poblado", "lat": None, "lon": None, "radius_km": 5.0},
+            ]
+
+            user = (await session.execute(select(User))).scalar_one()
+            assert user.full_name == "Comprador Uno"
 
     @pytest.mark.asyncio
     async def test_register_seller_success(self, register_client: AsyncClient) -> None:
@@ -127,7 +135,7 @@ class TestRegister:
         )
         assert response.status_code == 201, response.text
         data = response.json()
-        assert data["user"]["roles"] == ["seller"]
+        assert data["user"]["roles"][0]["name"] == "seller"
 
         from sqlalchemy import select
 
@@ -153,7 +161,7 @@ class TestRegister:
             },
         )
         assert response.status_code == 201, response.text
-        assert response.json()["user"]["roles"] == ["agent"]
+        assert response.json()["user"]["roles"][0]["name"] == "agent"
 
         from sqlalchemy import select
 

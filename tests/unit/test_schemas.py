@@ -20,6 +20,7 @@ from app.domain.schemas import (
     RefreshResponse,
     ResetPasswordRequest,
     ResetPasswordResponse,
+    RoleSummary,
     TokenResponse,
     UserProfile,
 )
@@ -191,7 +192,7 @@ class TestUserProfile:
             username="alice",
             email="alice@example.com",
             tenant_id=tenant_id,
-            roles=["admin"],
+            roles=[RoleSummary(id=uuid.uuid4(), name="admin")],
             is_active=True,
             is_locked=False,
         )
@@ -209,7 +210,7 @@ class TestUserProfile:
             username="alice",
             email="alice@example.com",
             tenant_id=tenant_id,
-            roles=["user"],
+            roles=[RoleSummary(id=uuid.uuid4(), name="user")],
             is_active=True,
             is_locked=False,
             consent_given_at=now,
@@ -305,7 +306,7 @@ class TestPaginatedUsersResponse:
             username="alice",
             email="alice@example.com",
             tenant_id=tenant_id,
-            roles=["user"],
+            roles=[RoleSummary(id=uuid.uuid4(), name="user")],
             is_active=True,
             is_locked=False,
         )

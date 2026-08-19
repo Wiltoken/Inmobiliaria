@@ -24,7 +24,7 @@ from app.adapters.redis_client import (
     touch_last_active,
 )
 from app.api.v1.deps import get_db
-from app.config import settings
+from app.config import DEFAULT_TENANT_ID, settings
 from app.core.exceptions import (
     AccountLockedError,
     CaptchaFailedError,
@@ -55,10 +55,12 @@ from app.domain.models import (
     User,
 )
 from app.domain.schemas import (
+    AuthUserResponse,
     ErrorResponse,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LoginRequest,
+    LoginResponse,
     RefreshRequest,
     RefreshResponse,
     RegisterRequest,
@@ -66,7 +68,7 @@ from app.domain.schemas import (
     RegisterUserResponse,
     ResetPasswordRequest,
     ResetPasswordResponse,
-    TokenResponse,
+    RoleSummary,
 )
 from app.ports.captcha import CaptchaVerificationError
 
@@ -136,7 +138,7 @@ async def register(
     7. Audit log
     """
     ip = _get_client_ip(request)
-    tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
+    tenant_id = DEFAULT_TENANT_ID
 
     allowed_roles = {"buyer", "seller", "agent"}
     if body.role not in allowed_roles:
@@ -193,6 +195,7 @@ async def register(
     user = User(
         username=body.username,
         email=email,
+        full_name=body.full_name,
         password_hash=password_hash,
         tenant_id=tenant_id,
         is_active=True,
@@ -209,7 +212,10 @@ async def register(
                 user_id=user.id,
                 budget_min=body.budget_min,
                 budget_max=body.budget_max,
-                preferred_locations=body.preferred_locations or [],
+                preferred_locations=[
+                    {"city": name, "lat": None, "lon": None, "radius_km": 5.0}
+                    for name in body.preferred_locations or []
+                ],
             )
         )
     elif body.role == "seller":
@@ -275,8 +281,9 @@ async def register(
             id=user.id,
             username=user.username,
             email=user.email,
+            full_name=user.full_name,
             role_id=role.id,
-            roles=[role.name],
+            roles=[RoleSummary(id=role.id, name=role.name)],
         ),
     )
 
@@ -286,7 +293,7 @@ async def register(
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
+    response_model=LoginResponse,
     responses={
         401: {"model": ErrorResponse, "description": "Invalid credentials"},
         423: {"model": ErrorResponse, "description": "Account locked"},
@@ -296,7 +303,7 @@ async def login(
     request: Request,
     body: LoginRequest,
     session: AsyncSession = Depends(get_db),
-) -> TokenResponse:
+) -> LoginResponse:
     """Authenticate with username/password and return JWT tokens.
 
     Flow:
@@ -309,7 +316,7 @@ async def login(
     """
     ip = _get_client_ip(request)
     # tenant_id from request body (optional — defaults to a zero UUID for single-tenant deploys)
-    tenant_id = body.tenant_id or uuid.UUID("00000000-0000-0000-0000-000000000000")
+    tenant_id = body.tenant_id or DEFAULT_TENANT_ID
 
     # Step 0: reCAPTCHA verification (before expensive computation)
     if body.recaptcha_token:
@@ -503,11 +510,18 @@ async def login(
 
     log.info("login_success", user_id=str(user.id), ip=ip)
 
-    return TokenResponse(
+    return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
         token_type="Bearer",
+        user=AuthUserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            full_name=user.full_name,
+            roles=[RoleSummary(id=role.id, name=role.name) for role in user.roles],
+        ),
     )
 
 

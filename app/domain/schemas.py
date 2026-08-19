@@ -34,6 +34,33 @@ class TokenResponse(BaseModel):
     token_type: str = "Bearer"
 
 
+class RoleSummary(BaseModel):
+    """Single role reference returned in auth responses."""
+
+    id: uuid.UUID
+    name: str
+
+
+class AuthUserResponse(BaseModel):
+    """Authenticated user payload (with role objects) returned on login."""
+
+    id: uuid.UUID
+    username: str
+    email: str
+    full_name: str | None = None
+    roles: list[RoleSummary]
+
+
+class LoginResponse(BaseModel):
+    """POST /api/v1/auth/login response — tokens plus the authenticated user."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    token_type: str = "Bearer"
+    user: AuthUserResponse
+
+
 class RefreshRequest(BaseModel):
     """POST /api/v1/auth/refresh request body."""
 
@@ -73,12 +100,14 @@ class UserProfile(BaseModel):
     id: uuid.UUID
     username: str
     email: str
+    full_name: str | None = None
     tenant_id: uuid.UUID
-    roles: list[str]
+    roles: list[RoleSummary]
     is_active: bool
     is_locked: bool
     consent_given_at: datetime | None = None
     password_changed_at: datetime | None = None
+    deleted_at: datetime | None = None
 
 
 # ── Registration schemas ───────────────────────────────────────────────────────
@@ -89,6 +118,7 @@ class RegisterRequest(BaseModel):
 
     username: Annotated[str, Field(min_length=3, max_length=255)]
     email: Annotated[str, Field(min_length=1, max_length=255)]
+    full_name: str | None = None
     password: Annotated[str, Field(min_length=8, max_length=128)]
     role: Annotated[str, Field(min_length=1, max_length=50)]
     # Seller profile fields
@@ -109,8 +139,9 @@ class RegisterUserResponse(BaseModel):
     id: uuid.UUID
     username: str
     email: str
+    full_name: str | None = None
     role_id: uuid.UUID
-    roles: list[str]
+    roles: list[RoleSummary]
 
 
 class RegisterResponse(BaseModel):
@@ -184,6 +215,27 @@ class PaginatedUsersResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class AdminUserCreate(BaseModel):
+    """POST /api/v1/admin/users request body — admin creates a user."""
+
+    username: Annotated[str, Field(min_length=3, max_length=255)]
+    email: Annotated[str, Field(min_length=1, max_length=255)]
+    full_name: str | None = None
+    password: Annotated[str, Field(min_length=8, max_length=128)]
+    role: Annotated[str, Field(min_length=1, max_length=50)]
+    is_active: bool = True
+
+
+class AdminUserUpdate(BaseModel):
+    """PATCH /api/v1/admin/users/{user_id} request body — all optional."""
+
+    email: str | None = None
+    full_name: str | None = None
+    is_active: bool | None = None
+    is_locked: bool | None = None
+    roles: list[str] | None = None
 
 
 class AuditLogEntry(BaseModel):

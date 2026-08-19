@@ -124,8 +124,8 @@ export default function RegisterPage() {
       const payload = {
         username: formData.username,
         email: formData.email,
+        full_name: formData.name,
         password: formData.password,
-        name: formData.name,
         role: formData.role,
         ...(formData.role === 'seller' && formData.phone && { phone: formData.phone }),
         ...(formData.role === 'seller' && formData.company && { company_name: formData.company }),

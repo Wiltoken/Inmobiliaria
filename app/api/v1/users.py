@@ -25,7 +25,7 @@ from app.domain.models import (
     SellerProfile,
     User,
 )
-from app.domain.schemas import UserProfile
+from app.domain.schemas import RoleSummary, UserProfile
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/users", tags=["users"])
@@ -75,8 +75,9 @@ async def get_me(
         id=user.id,
         username=user.username,
         email=user.email,
+        full_name=user.full_name,
         tenant_id=user.tenant_id,
-        roles=[role.name for role in user.roles],
+        roles=[RoleSummary(id=role.id, name=role.name) for role in user.roles],
         is_active=user.is_active,
         is_locked=user.is_locked,
         consent_given_at=user.consent_given_at,
