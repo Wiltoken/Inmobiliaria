@@ -75,9 +75,6 @@ celery_app = Celery(
     "inmobiliaria",
     broker=broker_url,
     backend=result_backend,
-    include=[
-        "app.core.celery_app.tasks",
-    ],
 )
 
 # Configure from object (Celery 5.x style)

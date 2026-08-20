@@ -13,6 +13,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "redis[hiredis]>=5.2.0",
+    "celery>=5.4.0",
     "structlog>=25.0.0",
     "pydantic>=2.13.0",
     "pydantic-settings>=2.7.0",
