@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Inmobiliaria Platform — Database Restore Script
 # ─────────────────────────────────────────────────────────────────────────────
-# Usage: docker compose -f docker-compose.prod.yml exec postgres /backups/restore.sh <backup_file>
+# Usage: docker compose exec postgres /scripts/restore.sh <backup_file>
 # Or from host: make restore FILE=inmobiliaria_20240115_030000.sql.gz
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -14,7 +14,8 @@ RETENTION_DAYS=7
 
 # PostgreSQL connection parameters
 export PGPASSWORD="${POSTGRES_PASSWORD:-changeme}"
-PGHOST="${PGHOST:-postgres}"
+# 127.0.0.1 (not "postgres"): these scripts run INSIDE the postgres container.
+PGHOST="${PGHOST:-127.0.0.1}"
 PGPORT="${PGPORT:-5432}"
 PGDATABASE="${PGDATABASE:-inmobiliaria_db}"
 PGUSER="${PGUSER:-inmuebles}"

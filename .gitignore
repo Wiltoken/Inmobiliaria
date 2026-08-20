@@ -30,3 +30,7 @@ Thumbs.db
 
 # ── Logs ──────────────────────────────────────────────────────────────────
 *.log
+
+# ── Database backups (generated at runtime) ───────────────────────────────
+backups/*
+!backups/.gitkeep

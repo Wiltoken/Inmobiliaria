@@ -42,12 +42,9 @@ worker_max_tasks_per_child = 1000  # Recycle workers to prevent memory leaks
 # ── Beat Schedule ─────────────────────────────────────────────────────────────
 
 beat_schedule = {
-    # Daily database backup at 2:00 AM UTC
-    "daily-backup": {
-        "task": "app.core.celery_app.tasks.daily_backup",
-        "schedule": crontab(hour=2, minute=0),
-        "options": {"queue": "maintenance"},
-    },
+    # NOTE: database backups are handled by scripts/backup.sh (run inside the
+    # postgres container via `make backup` / a host cron), NOT by Celery — the
+    # worker image has neither pg_dump nor the /backups volume.
     # Cleanup old matches every 6 hours
     "cleanup-old-matches": {
         "task": "app.core.celery_app.tasks.cleanup_old_matches",
@@ -83,82 +80,6 @@ celery_app.config_from_object(
 )
 
 # ── Periodic Tasks ─────────────────────────────────────────────────────────────
-
-
-@celery_app.task(name="app.core.celery_app.tasks.daily_backup")
-def daily_backup() -> dict:
-    """Run daily database backup.
-
-    Executes pg_dump to /backups/, compresses with gzip, and rotates old backups.
-
-    Returns:
-        dict with backup status and file path.
-    """
-    import subprocess
-    from datetime import datetime
-
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    backup_dir = "/backups"
-    backup_file = f"{backup_dir}/inmobiliaria_{timestamp}.sql.gz"
-
-    try:
-        # Run pg_dump through the postgres container
-        result = subprocess.run(
-            [
-                "pg_dump",
-                "-h", "postgres",
-                "-U", "inmuebles",
-                "-d", "inmobiliaria_db",
-                "-F", "p",  # Plain text format
-                "-f", f"/tmp/inmobiliaria_{timestamp}.sql",
-            ],
-            env={
-                **os.environ,
-                "PGPASSWORD": os.getenv("POSTGRES_PASSWORD", "changeme"),
-            },
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(f"pg_dump failed: {result.stderr}")
-
-        # Compress
-        compress_result = subprocess.run(
-            ["gzip", "-9", f"/tmp/inmobiliaria_{timestamp}.sql"],
-            capture_output=True,
-        )
-
-        if compress_result.returncode != 0:
-            raise RuntimeError("Compression failed")
-
-        # Move to backup directory
-        subprocess.run(
-            ["mv", f"/tmp/inmobiliaria_{timestamp}.sql.gz", backup_file],
-            check=True,
-        )
-
-        # Rotate old backups (keep last 7 days)
-        rotate_result = subprocess.run(
-            [
-                "find", backup_dir,
-                "-name", "inmobiliaria_*.sql.gz",
-                "-mtime", "+7",
-                "-delete",
-            ],
-        )
-
-        return {
-            "status": "success",
-            "backup_file": backup_file,
-            "timestamp": timestamp,
-        }
-
-    except subprocess.TimeoutExpired:
-        return {"status": "error", "message": "Backup timed out after 5 minutes"}
-    except Exception as exc:
-        return {"status": "error", "message": str(exc)}
 
 
 @celery_app.task(name="app.core.celery_app.tasks.cleanup_old_matches")

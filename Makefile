@@ -73,14 +73,14 @@ logs-celery:
 # ── Maintenance ───────────────────────────────────────────────────────────────
 
 backup:
-	$(COMPOSE) -f docker-compose.prod.yml exec -T postgres /backups/backup.sh
+	$(COMPOSE) -f docker-compose.prod.yml exec -T postgres /scripts/backup.sh
 
 restore:
 	@echo "Available backups:"
 	@$(COMPOSE) -f docker-compose.prod.yml exec -T postgres ls -lh /backups/*.sql.gz 2>/dev/null || echo "No backups found"
 	@echo ""
 	@read -p "Enter backup filename: " FILE; \
-	$(COMPOSE) -f docker-compose.prod.yml exec -T postgres /backups/restore.sh "/backups/$$FILE"
+	$(COMPOSE) -f docker-compose.prod.yml exec -T postgres /scripts/restore.sh "/backups/$$FILE"
 
 migrate:
 	$(COMPOSE) -f docker-compose.prod.yml exec api alembic upgrade head
