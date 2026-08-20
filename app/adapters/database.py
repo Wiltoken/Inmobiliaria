@@ -26,6 +26,10 @@ def get_engine() -> AsyncEngine:
             max_overflow=20,
             pool_pre_ping=True,
             pool_recycle=3600,
+            # asyncpg prepared statements are incompatible with PgBouncer
+            # transaction pooling; disabling the statement cache uses the
+            # simple protocol and works across pooled backend connections.
+            connect_args={"statement_cache_size": 0},
         )
     return _engine
 
