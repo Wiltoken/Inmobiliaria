@@ -146,9 +146,16 @@ class TestRefreshResponse:
     """Tests for RefreshResponse."""
 
     def test_refresh_response_defaults(self) -> None:
-        """RefreshResponse sets token_type=Bearer by default."""
-        resp = RefreshResponse(access_token="new-access-token", expires_in=900)
+        """RefreshResponse sets token_type=Bearer by default and returns both tokens."""
+        resp = RefreshResponse(
+            access_token="new-access-token",
+            refresh_token="new-refresh-token",
+            expires_in=900,
+        )
         assert resp.token_type == "Bearer"
+        assert resp.access_token == "new-access-token"
+        assert resp.refresh_token == "new-refresh-token"
+        assert resp.expires_in == 900
 
 
 # --------------------------------------------------------------------------- #

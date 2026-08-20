@@ -28,22 +28,22 @@ export default function DashboardPage({ onPageView }) {
       if (isBuyer()) {
         const [matchesRes, propertiesRes, statsRes] = await Promise.allSettled([
           matchesApi.list(),
-          propertiesApi.list({ page: 1, page_size: 6, sort: 'created_at:desc' }),
+          propertiesApi.list({ page: 1, limit: 6 }),
           Promise.resolve({ data: { propertiesViewed: 24, newMatches: 5, favorites: 12, activeInquiries: 3 } }),
         ]);
 
         setData({
-          matches: matchesRes.status === 'fulfilled' ? matchesRes.value.data.items || [] : [],
-          properties: propertiesRes.status === 'fulfilled' ? propertiesRes.value.data.items || [] : [],
+          matches: matchesRes.status === 'fulfilled' ? matchesRes.value.data.matches || [] : [],
+          properties: propertiesRes.status === 'fulfilled' ? propertiesRes.value.data.properties || [] : [],
           stats: statsRes.status === 'fulfilled' ? statsRes.value.data : {},
         });
       } else if (isSeller()) {
         const [propertiesRes] = await Promise.allSettled([
-          propertiesApi.list({ owner_id: 'me' }),
+          propertiesApi.list({ page: 1, limit: 20 }),
         ]);
 
         setData({
-          properties: propertiesRes.status === 'fulfilled' ? propertiesRes.value.data.items || [] : [],
+          properties: propertiesRes.status === 'fulfilled' ? propertiesRes.value.data.properties || [] : [],
           stats: { totalViews: 1234, pendingInquiries: 5 },
         });
       } else if (isAgent()) {

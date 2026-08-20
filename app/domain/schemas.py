@@ -68,11 +68,16 @@ class RefreshRequest(BaseModel):
 
 
 class RefreshResponse(BaseModel):
-    """Response schema for token refresh."""
+    """Response schema for token refresh.
+
+    Includes the rotated refresh token so the client can persist the new
+    token pair (rotation invalidates the previous refresh token).
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     access_token: str
+    refresh_token: str
     expires_in: int  # seconds
     token_type: str = "Bearer"
 
@@ -353,6 +358,25 @@ class PropertySearch(BaseModel):
     limit: int = 20
 
 
+class PropertyLocation(BaseModel):
+    """Nested location object exposed in property responses.
+
+    ``lat``/``lon`` are derived from the GeoJSON ``location`` JSONB
+    (``{"type": "Point", "coordinates": [lon, lat]}``). The descriptive
+    fields (address/neighborhood/city/stratum) are surfaced when present
+    in the JSONB; they default to ``None`` otherwise.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    address: str | None = None
+    neighborhood: str | None = None
+    city: str | None = None
+    stratum: int | None = None
+    lat: float | None = None
+    lon: float | None = None
+
+
 class PropertyResponse(BaseModel):
     """Property in list/detail responses."""
 
@@ -366,6 +390,7 @@ class PropertyResponse(BaseModel):
     area_m2: float | None
     lat: float | None
     lon: float | None
+    location: PropertyLocation | None = None
     rooms: int | None
     bathrooms: int | None
     features: dict | None

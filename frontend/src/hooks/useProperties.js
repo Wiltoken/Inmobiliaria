@@ -27,14 +27,23 @@ export function useProperties() {
     setError(null);
 
     try {
-      const params = {
-        ...filters,
-        page,
-        page_size: pagination.pageSize,
-      };
+      // Only forward params supported by the backend PropertySearch schema,
+      // skipping empty values so the API never receives invalid/empty filters
+      // (e.g. empty strings for numeric fields cause a 422).
+      const params = { page, limit: pagination.pageSize };
+      const supportedFilters = [
+        'type', 'operation', 'price_min', 'price_max',
+        'rooms_min', 'bathrooms_min', 'area_min', 'area_max', 'query',
+      ];
+      supportedFilters.forEach((key) => {
+        const value = filters[key];
+        if (value !== undefined && value !== null && value !== '') {
+          params[key] = value;
+        }
+      });
 
       const response = await propertiesApi.list(params);
-      const { items, total, total_pages } = response.data;
+      const { properties: items, total, total_pages } = response.data;
 
       setProperties(page === 1 ? items : [...properties, ...items]);
       setPagination({

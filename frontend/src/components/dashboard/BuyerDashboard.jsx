@@ -120,7 +120,9 @@ export default function BuyerDashboard({
                       {match.property?.title}
                     </p>
                     <p className="text-sm text-gray-500 mt-1">
-                      {match.property?.location?.neighborhood}, {match.property?.location?.city}
+                      {[match.property?.location?.neighborhood, match.property?.location?.city]
+                        .filter(Boolean)
+                        .join(', ')}
                     </p>
                   </div>
                 </Card>

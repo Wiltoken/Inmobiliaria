@@ -28,6 +28,7 @@ from app.domain.schemas import (
     PaginatedPropertiesResponse,
     PhotoUploadResponse,
     PropertyCreate,
+    PropertyLocation,
     PropertyPhotoResponse,
     PropertyResponse,
     PropertySearch,
@@ -76,6 +77,27 @@ def _extract_lat_lon(prop: Property) -> tuple[float | None, float | None]:
         coords = loc.get("coordinates", [])
         return coords[1] if len(coords) > 1 else None, coords[0] if coords else None
     return None, None
+
+
+def _build_location_payload(prop: Property) -> PropertyLocation | None:
+    """Build the nested location object from the property's JSONB location.
+
+    ``lat``/``lon`` come from the GeoJSON Point coordinates; descriptive keys
+    (address/neighborhood/city/stratum) are read defensively from the JSONB so
+    they surface whenever present, otherwise they default to ``None``.
+    """
+    loc = prop.location
+    if not loc:
+        return None
+    lat, lon = _extract_lat_lon(prop)
+    return PropertyLocation(
+        address=loc.get("address"),
+        neighborhood=loc.get("neighborhood"),
+        city=loc.get("city"),
+        stratum=loc.get("stratum"),
+        lat=lat,
+        lon=lon,
+    )
 
 
 def _check_owner_or_agent(user: User, prop: Property) -> None:
@@ -158,6 +180,7 @@ def _build_property_response(prop: Property, distance: float | None = None) -> P
         area_m2=prop.area_m2,
         lat=lat,
         lon=lon,
+        location=_build_location_payload(prop),
         rooms=prop.rooms,
         bathrooms=prop.bathrooms,
         features=prop.features,

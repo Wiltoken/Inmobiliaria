@@ -51,6 +51,7 @@ from app.domain.schemas import (
     ErrorResponse,
     PaginatedAuditLogsResponse,
     PaginatedUsersResponse,
+    PropertyLocation,
     PropertyResponse,
     RoleSummary,
     UserProfile,
@@ -833,6 +834,17 @@ def _build_admin_property_response(prop: Property) -> PropertyResponse:
     else:
         lat, lon = None, None
 
+    location_payload = None
+    if loc:
+        location_payload = PropertyLocation(
+            address=loc.get("address"),
+            neighborhood=loc.get("neighborhood"),
+            city=loc.get("city"),
+            stratum=loc.get("stratum"),
+            lat=lat,
+            lon=lon,
+        )
+
     return PropertyResponse(
         id=prop.id,
         type=prop.type,
@@ -842,6 +854,7 @@ def _build_admin_property_response(prop: Property) -> PropertyResponse:
         area_m2=prop.area_m2,
         lat=lat,
         lon=lon,
+        location=location_payload,
         rooms=prop.rooms,
         bathrooms=prop.bathrooms,
         features=prop.features,

@@ -31,9 +31,8 @@ export default function SearchPage({ onPageView }) {
   // Parse initial filters from URL
   const getInitialFilters = () => {
     const filters = {};
-    if (searchParams.get('type')) filters.type = searchParams.get('type').split(',');
+    if (searchParams.get('type')) filters.type = searchParams.get('type');
     if (searchParams.get('operation')) filters.operation = searchParams.get('operation');
-    if (searchParams.get('city')) filters.city = searchParams.get('city');
     if (searchParams.get('price_min')) filters.price_min = searchParams.get('price_min');
     if (searchParams.get('price_max')) filters.price_max = searchParams.get('price_max');
     return filters;
@@ -56,7 +55,7 @@ export default function SearchPage({ onPageView }) {
     matchesApi.list()
       .then((res) => {
         const scores = {};
-        const matches = res.data?.items || res.data || [];
+        const matches = res.data?.matches || res.data || [];
         matches.forEach((m) => {
           if (m.property_id) {
             scores[m.property_id] = m.score;
@@ -70,9 +69,8 @@ export default function SearchPage({ onPageView }) {
   const handleFilter = (filters) => {
     // Update URL params
     const params = new URLSearchParams();
-    if (filters.type?.length) params.set('type', filters.type.join(','));
+    if (filters.type) params.set('type', filters.type);
     if (filters.operation) params.set('operation', filters.operation);
-    if (filters.city) params.set('city', filters.city);
     if (filters.price_min) params.set('price_min', filters.price_min);
     if (filters.price_max) params.set('price_max', filters.price_max);
     setSearchParams(params);

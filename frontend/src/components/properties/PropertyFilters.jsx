@@ -23,26 +23,21 @@ export default function PropertyFilters({
 }) {
   const [filters, setFilters] = useState({
     operation: initialFilters.operation || 'sale',
-    type: initialFilters.type || [],
+    type: initialFilters.type || '',
     price_min: initialFilters.price_min || '',
     price_max: initialFilters.price_max || '',
-    city: initialFilters.city || '',
-    neighborhood: initialFilters.neighborhood || '',
     rooms_min: initialFilters.rooms_min || '',
     bathrooms_min: initialFilters.bathrooms_min || '',
     area_min: initialFilters.area_min || '',
     area_max: initialFilters.area_max || '',
-    radius: initialFilters.radius || 5,
   });
 
   const [showFilters, setShowFilters] = useState(false);
 
-  const handleTypeToggle = (value) => {
+  const handleTypeSelect = (value) => {
     setFilters((prev) => ({
       ...prev,
-      type: prev.type.includes(value)
-        ? prev.type.filter((t) => t !== value)
-        : [...prev.type, value],
+      type: prev.type === value ? '' : value,
     }));
   };
 
@@ -63,16 +58,13 @@ export default function PropertyFilters({
   const handleReset = () => {
     const resetFilters = {
       operation: 'sale',
-      type: [],
+      type: '',
       price_min: '',
       price_max: '',
-      city: '',
-      neighborhood: '',
       rooms_min: '',
       bathrooms_min: '',
       area_min: '',
       area_max: '',
-      radius: 5,
     };
     setFilters(resetFilters);
     onFilter(resetFilters);
@@ -133,10 +125,10 @@ export default function PropertyFilters({
               <button
                 key={type.value}
                 type="button"
-                onClick={() => handleTypeToggle(type.value)}
+                onClick={() => handleTypeSelect(type.value)}
                 className={`
                   px-3 py-1.5 rounded-full text-sm font-medium transition-all
-                  ${filters.type.includes(type.value)
+                  ${filters.type === type.value
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }
@@ -170,22 +162,6 @@ export default function PropertyFilters({
               className="flex-1"
             />
           </div>
-        </div>
-
-        {/* Location */}
-        <div className="grid grid-cols-2 gap-2">
-          <Input
-            label="Ciudad"
-            placeholder="Ej: Bogotá"
-            value={filters.city}
-            onChange={(e) => handleChange('city', e.target.value)}
-          />
-          <Input
-            label="Barrio"
-            placeholder="Ej: Chapinero"
-            value={filters.neighborhood}
-            onChange={(e) => handleChange('neighborhood', e.target.value)}
-          />
         </div>
 
         {/* Rooms & Bathrooms */}

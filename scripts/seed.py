@@ -362,7 +362,6 @@ async def seed(session: AsyncSession):
         )
         if inquiry.status == InquiryStatus.REPLIED:
             inquiry.response_message = "Gracias por tu interés. La propiedad está disponible. ¿Qué día te queda bien para una visita?"
-            inquiry.updated_at = datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 48))
         session.add(inquiry)
         inquiries_created += 1
     await session.flush()

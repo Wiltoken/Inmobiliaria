@@ -17,13 +17,13 @@ const COLORS = ['#1F3864', '#2B579A', '#E8A838', '#16A34A', '#DC2626'];
 export default function BIDashboard() {
   const [data, setData] = useState({
     dau: 0,
-    searchesToday: 0,
-    propertiesViewed: 0,
-    inquiriesSent: 0,
-    eventsOverTime: [],
-    userRoles: [],
-    topProperties: [],
-    recentActions: [],
+    searches_today: 0,
+    properties_viewed: 0,
+    inquiries_sent: 0,
+    events_over_time: [],
+    user_roles: [],
+    top_properties: [],
+    recent_actions: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -41,10 +41,10 @@ export default function BIDashboard() {
       // Use mock data for demo
       setData({
         dau: 127,
-        searchesToday: 342,
-        propertiesViewed: 891,
-        inquiriesSent: 47,
-        eventsOverTime: [
+        searches_today: 342,
+        properties_viewed: 891,
+        inquiries_sent: 47,
+        events_over_time: [
           { date: 'Lun', events: 1200 },
           { date: 'Mar', events: 1450 },
           { date: 'Mié', events: 1380 },
@@ -53,20 +53,20 @@ export default function BIDashboard() {
           { date: 'Sáb', events: 2100 },
           { date: 'Dom', events: 1750 },
         ],
-        userRoles: [
+        user_roles: [
           { role: 'Comprador', count: 450 },
           { role: 'Vendedor', count: 180 },
           { role: 'Agente', count: 65 },
           { role: 'Admin', count: 12 },
         ],
-        topProperties: [
+        top_properties: [
           { id: '1', title: 'Apartamento en El Poblado', views: 1234 },
           { id: '2', title: 'Casa en Chico', views: 987 },
           { id: '3', title: 'Oficina en Santa Fe', views: 756 },
           { id: '4', title: 'Local en Andino', views: 654 },
           { id: '5', title: 'Casa en La Carolina', views: 543 },
         ],
-        recentActions: [
+        recent_actions: [
           { action: 'page_view', user: 'john@example.com', time: 'Hace 2 min' },
           { action: 'search', user: 'jane@example.com', time: 'Hace 5 min' },
           { action: 'property_view', user: 'bob@example.com', time: 'Hace 8 min' },
@@ -121,21 +121,21 @@ export default function BIDashboard() {
         <MetricCard
           icon={Search}
           label="Búsquedas Hoy"
-          value={data.searchesToday}
+          value={data.searches_today}
           color="accent"
           trend="+8%"
         />
         <MetricCard
           icon={Eye}
           label="Propiedades Vistas"
-          value={data.propertiesViewed}
+          value={data.properties_viewed}
           color="blue"
           trend="+23%"
         />
         <MetricCard
           icon={MessageSquare}
           label="Consultas Enviadas"
-          value={data.inquiriesSent}
+          value={data.inquiries_sent}
           color="success"
           trend="+5%"
         />
@@ -151,7 +151,7 @@ export default function BIDashboard() {
           </div>
           <div className="p-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.eventsOverTime}>
+              <LineChart data={data.events_over_time}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="date"
@@ -193,7 +193,7 @@ export default function BIDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data.userRoles}
+                  data={data.user_roles}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -203,7 +203,7 @@ export default function BIDashboard() {
                   nameKey="role"
                   label={({ role, percent }) => `${role} ${(percent * 100).toFixed(0)}%`}
                 >
-                  {data.userRoles.map((entry, index) => (
+                  {data.user_roles.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -229,11 +229,11 @@ export default function BIDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {data.topProperties.map((property, index) => (
-                <tr key={property.id} className="hover:bg-gray-50">
+              {data.top_properties.map((property, index) => (
+                <tr key={property.id || index} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm text-gray-500">{index + 1}</td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {property.title}
+                    {property.title || (property.id ? property.id.slice(0, 8) : `Propiedad ${index + 1}`)}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900 text-right">
                     {property.views.toLocaleString()}
@@ -261,7 +261,7 @@ export default function BIDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {data.recentActions.map((action, index) => (
+              {data.recent_actions.map((action, index) => (
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <Badge variant="primary" size="sm">

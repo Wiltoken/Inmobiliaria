@@ -188,6 +188,9 @@ class TestAuthFlowE2E:
         assert "access_token" in refresh_data
         assert refresh_data["access_token"] != original_access
         assert refresh_data["token_type"] == "Bearer"
+        # Rotation returns a NEW refresh token (frontend persists it).
+        assert "refresh_token" in refresh_data
+        assert refresh_data["refresh_token"] != refresh_token
 
     @pytest.mark.asyncio
     async def test_refresh_with_invalid_token_returns_401(

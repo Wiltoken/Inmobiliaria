@@ -610,7 +610,7 @@ async def refresh(
         roles=user_roles,
         jti=new_jti,
     )
-    _new_refresh_token = create_refresh_token(
+    new_refresh_token = create_refresh_token(
         user_id=user_id,
         tenant_id=tenant_id,
         jti=new_refresh_jti,
@@ -640,6 +640,7 @@ async def refresh(
 
     return RefreshResponse(
         access_token=new_access_token,
+        refresh_token=new_refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
         token_type="Bearer",
     )

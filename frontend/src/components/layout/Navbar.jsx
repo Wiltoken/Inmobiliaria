@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Bell, Menu, X, LogOut, User, Settings } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
-import { matchesApi } from '../../lib/api';
+import { matchesApi, authApi } from '../../lib/api';
 import Badge from '../ui/Badge';
 
 export default function Navbar({ className = '' }) {
@@ -17,7 +17,7 @@ export default function Navbar({ className = '' }) {
 
     matchesApi.list()
       .then((res) => {
-        const matches = res.data?.items || res.data || [];
+        const matches = res.data?.matches || res.data || [];
         const currentCount = matches.length;
         const lastCount = parseInt(localStorage.getItem('lastMatchCount') || '0', 10);
         setNewMatchCount(Math.max(0, currentCount - lastCount));
@@ -32,7 +32,14 @@ export default function Navbar({ className = '' }) {
     setNewMatchCount(0);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the refresh token server-side before clearing local state.
+    // Must run before logout() so the Authorization header is still present.
+    try {
+      await authApi.logout();
+    } catch (err) {
+      // Best-effort: proceed with local logout even if server revocation fails.
+    }
     logout();
     navigate('/login');
   };
