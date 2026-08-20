@@ -7,6 +7,7 @@
 .venv
 venv
 __pycache__
+**/__pycache__
 *.py[cod]
 *.egg-info
 .pytest_cache
@@ -16,20 +17,20 @@ __pycache__
 .coverage.*
 htmlcov
 
-# ── Frontend (built/hosted by the dedicated nginx image) ─────────────────
-frontend
-node_modules
-dist
-.vite
+# ── Frontend deps/build artifacts (source stays: the nginx image builds it) ──
+**/node_modules
+**/dist
+**/.vite
 
 # ── Environment / secrets ─────────────────────────────────────────────────
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 
-# ── Local infra (not needed inside the API image) ────────────────────────
+# ── Local infra not baked into any image ──────────────────────────────────
 docker-compose*.yml
-nginx
 pgbouncer
 backups
 

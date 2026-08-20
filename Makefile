@@ -180,13 +180,12 @@ celery-flower:
 # ── SSL / Let's Encrypt ────────────────────────────────────────────────────────
 
 cert-init:
-	@echo "Initializing Let's Encrypt certificate..."
-	mkdir -p ./volumes/certbot/conf/live/inmobiliaria
-	@echo "Place your certificate files in ./volumes/certbot/conf/live/inmobiliaria/"
-	@echo "Or use certbot in standalone mode after stopping nginx:"
-	@echo "  $(COMPOSE) -f docker-compose.prod.yml run --rm --entrypoint certbot certbot-auto certonly"
+	@echo "TLS/certbot is deferred until a domain points at this host."
+	@echo "When ready:"
+	@echo "  1. Point the domain's DNS at this server."
+	@echo "  2. Obtain a certificate with the certbot image mounted on the certs volume."
+	@echo "  3. Uncomment the HTTPS server block in nginx/conf.d/inmobiliaria.conf,"
+	@echo "     then 'make restart'."
 
 cert-renew:
-	@echo "Renewing Let's Encrypt certificates..."
-	$(COMPOSE) -f docker-compose.prod.yml run --rm --entrypoint certbot certbot-auto renew --webroot -w /var/www/certbot
-	$(COMPOSE) -f docker-compose.prod.yml exec nginx nginx -s reload
+	@echo "Not applicable until TLS is enabled — see 'make cert-init'."
