@@ -1,0 +1,42 @@
+# ── VCS ──────────────────────────────────────────────────────────────────
+.git
+.gitignore
+.github
+
+# ── Python ───────────────────────────────────────────────────────────────
+.venv
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+.coverage.*
+htmlcov
+
+# ── Frontend (built/hosted by the dedicated nginx image) ─────────────────
+frontend
+node_modules
+dist
+.vite
+
+# ── Environment / secrets ─────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Local infra (not needed inside the API image) ────────────────────────
+docker-compose*.yml
+nginx
+pgbouncer
+backups
+
+# ── Docs / editor / OS ───────────────────────────────────────────────────
+docs
+*.md
+.idea
+.vscode
+.DS_Store
+*.log

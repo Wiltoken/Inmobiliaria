@@ -1,4 +1,4 @@
-# Build stage
+# ── Build stage ────────────────────────────────────────────────────────────
 FROM python:3.13-slim AS builder
 
 WORKDIR /build
@@ -8,10 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir --user -e .
+# Install the application (non-editable) plus all runtime dependencies.
+# Non-editable avoids the editable-install finder pointing at a build-only path.
+COPY pyproject.toml ./
+COPY app/ ./app/
+RUN pip install --no-cache-dir --user .
 
-# Runtime stage
+# ── Runtime stage ──────────────────────────────────────────────────────────
 FROM python:3.13-slim
 
 WORKDIR /app

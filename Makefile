@@ -4,7 +4,8 @@
 # Inmobiliaria Platform — Makefile
 # ─────────────────────────────────────────────────────────────────────────────
 
-export COMPOSE_FILE := docker-compose.prod.yml
+# Detect Compose v2 plugin (`docker compose`) vs standalone binary (`docker-compose`).
+COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 
 # Default target
 help:
@@ -35,7 +36,7 @@ help:
 # ── Development ───────────────────────────────────────────────────────────────
 
 dev:
-	docker compose -f docker-compose.dev.yml up -d
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d
 	@echo "Development environment started. Access:"
 	@echo "  API:      http://localhost:8000"
 	@echo "  Docs:     http://localhost:8000/docs"
@@ -45,48 +46,48 @@ dev:
 # ── Production ───────────────────────────────────────────────────────────────
 
 prod:
-	docker compose -f docker-compose.prod.yml up -d --build
+	$(COMPOSE) -f docker-compose.prod.yml up -d --build
 	@echo "Production environment started."
 	@echo "  Run 'make migrate' to apply migrations"
 	@echo "  Run 'make logs' to view logs"
 
 deploy:
-	docker compose -f docker-compose.prod.yml up -d --build --scale api=3
+	$(COMPOSE) -f docker-compose.prod.yml up -d --build --scale api=3
 	@echo "Deployed with 3 API replicas."
 
 logs:
-	docker compose -f docker-compose.prod.yml logs -f --tail=100
+	$(COMPOSE) -f docker-compose.prod.yml logs -f --tail=100
 
 logs-api:
-	docker compose -f docker-compose.prod.yml logs -f api --tail=100
+	$(COMPOSE) -f docker-compose.prod.yml logs -f api --tail=100
 
 logs-postgres:
-	docker compose -f docker-compose.prod.yml logs -f postgres --tail=50
+	$(COMPOSE) -f docker-compose.prod.yml logs -f postgres --tail=50
 
 logs-redis:
-	docker compose -f docker-compose.prod.yml logs -f redis --tail=50
+	$(COMPOSE) -f docker-compose.prod.yml logs -f redis --tail=50
 
 logs-celery:
-	docker compose -f docker-compose.prod.yml logs -f celery-worker celery-beat --tail=100
+	$(COMPOSE) -f docker-compose.prod.yml logs -f celery-worker celery-beat --tail=100
 
 # ── Maintenance ───────────────────────────────────────────────────────────────
 
 backup:
-	docker compose -f docker-compose.prod.yml exec -T postgres /backups/backup.sh
+	$(COMPOSE) -f docker-compose.prod.yml exec -T postgres /backups/backup.sh
 
 restore:
 	@echo "Available backups:"
-	@docker compose -f docker-compose.prod.yml exec -T postgres ls -lh /backups/*.sql.gz 2>/dev/null || echo "No backups found"
+	@$(COMPOSE) -f docker-compose.prod.yml exec -T postgres ls -lh /backups/*.sql.gz 2>/dev/null || echo "No backups found"
 	@echo ""
 	@read -p "Enter backup filename: " FILE; \
-	docker compose -f docker-compose.prod.yml exec -T postgres /backups/restore.sh "/backups/$$FILE"
+	$(COMPOSE) -f docker-compose.prod.yml exec -T postgres /backups/restore.sh "/backups/$$FILE"
 
 migrate:
-	docker compose -f docker-compose.prod.yml exec api alembic upgrade head
+	$(COMPOSE) -f docker-compose.prod.yml exec api alembic upgrade head
 
 migrate-create:
 	@read -p "Migration name: " NAME; \
-	docker compose -f docker-compose.prod.yml exec api alembic revision --autogenerate -m "$$NAME"
+	$(COMPOSE) -f docker-compose.prod.yml exec api alembic revision --autogenerate -m "$$NAME"
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 
@@ -126,55 +127,55 @@ seed:
 # ── Build ──────────────────────────────────────────────────────────────────────
 
 build:
-	docker compose -f docker-compose.prod.yml build --no-cache
+	$(COMPOSE) -f docker-compose.prod.yml build --no-cache
 
 build-nocache:
-	docker compose -f docker-compose.prod.yml build --pull --no-cache
+	$(COMPOSE) -f docker-compose.prod.yml build --pull --no-cache
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
 clean:
-	docker compose -f docker-compose.prod.yml down -v --rmi local
-	docker compose -f docker-compose.dev.yml down -v --rmi local 2>/dev/null || true
+	$(COMPOSE) -f docker-compose.prod.yml down -v --rmi local
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml down -v --rmi local 2>/dev/null || true
 	@echo "Cleanup complete."
 
 restart:
-	docker compose -f docker-compose.prod.yml restart
+	$(COMPOSE) -f docker-compose.prod.yml restart
 
 restart-api:
-	docker compose -f docker-compose.prod.yml restart api
+	$(COMPOSE) -f docker-compose.prod.yml restart api
 
 restart-celery:
-	docker compose -f docker-compose.prod.yml restart celery-worker celery-beat
+	$(COMPOSE) -f docker-compose.prod.yml restart celery-worker celery-beat
 
 # ── Health checks ─────────────────────────────────────────────────────────────
 
 health:
 	@echo "Checking service health..."
 	@curl -sf http://localhost:8000/health/ready && echo "API: OK" || echo "API: FAIL"
-	@docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U inmuebles -d inmobiliaria_db && echo "Postgres: OK" || echo "Postgres: FAIL"
-	@docker compose -f docker-compose.prod.yml exec -T redis redis-cli ping && echo "Redis: OK" || echo "Redis: FAIL"
+	@$(COMPOSE) -f docker-compose.prod.yml exec -T postgres pg_isready -U inmuebles -d inmobiliaria_db && echo "Postgres: OK" || echo "Postgres: FAIL"
+	@$(COMPOSE) -f docker-compose.prod.yml exec -T redis redis-cli ping && echo "Redis: OK" || echo "Redis: FAIL"
 
 # ── Shell access ──────────────────────────────────────────────────────────────
 
 shell-api:
-	docker compose -f docker-compose.prod.yml exec api /bin/sh
+	$(COMPOSE) -f docker-compose.prod.yml exec api /bin/sh
 
 shell-postgres:
-	docker compose -f docker-compose.prod.yml exec postgres psql -U inmuebles -d inmobiliaria_db
+	$(COMPOSE) -f docker-compose.prod.yml exec postgres psql -U inmuebles -d inmobiliaria_db
 
 shell-redis:
-	docker compose -f docker-compose.prod.yml exec redis redis-cli
+	$(COMPOSE) -f docker-compose.prod.yml exec redis redis-cli
 
 # ── Database console ──────────────────────────────────────────────────────────
 
 psql:
-	docker compose -f docker-compose.prod.yml exec postgres psql -U inmuebles -d inmobiliaria_db
+	$(COMPOSE) -f docker-compose.prod.yml exec postgres psql -U inmuebles -d inmobiliaria_db
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 
 celery-flower:
-	docker compose -f docker-compose.prod.yml exec celery-worker celery -A app.core.celery_app flower --port=5555
+	$(COMPOSE) -f docker-compose.prod.yml exec celery-worker celery -A app.core.celery_app flower --port=5555
 
 # ── SSL / Let's Encrypt ────────────────────────────────────────────────────────
 
@@ -183,9 +184,9 @@ cert-init:
 	mkdir -p ./volumes/certbot/conf/live/inmobiliaria
 	@echo "Place your certificate files in ./volumes/certbot/conf/live/inmobiliaria/"
 	@echo "Or use certbot in standalone mode after stopping nginx:"
-	@echo "  docker compose -f docker-compose.prod.yml run --rm --entrypoint certbot certbot-auto certonly"
+	@echo "  $(COMPOSE) -f docker-compose.prod.yml run --rm --entrypoint certbot certbot-auto certonly"
 
 cert-renew:
 	@echo "Renewing Let's Encrypt certificates..."
-	docker compose -f docker-compose.prod.yml run --rm --entrypoint certbot certbot-auto renew --webroot -w /var/www/certbot
-	docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+	$(COMPOSE) -f docker-compose.prod.yml run --rm --entrypoint certbot certbot-auto renew --webroot -w /var/www/certbot
+	$(COMPOSE) -f docker-compose.prod.yml exec nginx nginx -s reload
