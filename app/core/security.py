@@ -5,6 +5,7 @@ All security thresholds come from settings — zero hardcoded literals.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -76,12 +77,13 @@ def hash_password(password: str) -> str:
 
 
 def hash_token(token: str) -> str:
-    """Hash a token (e.g., password reset token) using bcrypt.
+    """Hash a token (e.g., password reset / email verification) for storage.
 
-    Unlike hash_password(), this skips the human-facing password policy checks
-    since tokens are machine-generated secure random strings.
+    Uses a deterministic SHA-256 digest (NOT bcrypt) so the token can be
+    looked up by hash — these are machine-generated high-entropy secrets, so
+    a fast deterministic hash is correct and allows O(1) lookup.
     """
-    return pwd_context.hash(token)
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

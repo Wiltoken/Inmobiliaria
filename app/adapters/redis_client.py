@@ -52,6 +52,7 @@ RATE_LIMIT_PREFIX = "rate_limit"
 REFRESH_PREFIX = "refresh"
 LAST_ACTIVE_PREFIX = "last_active"
 MATCH_PREFIX = "match"
+EMAIL_VERIFY_PREFIX = "email_verify"
 
 
 def blacklist_key(jti: str) -> str:
@@ -161,6 +162,30 @@ async def touch_last_active(user_id: str, ttl_seconds: int) -> None:
 async def is_last_active_expired(user_id: str) -> bool:
     """Return True if the session has expired (key missing)."""
     return not await redis_exists(last_active_key(user_id))
+
+
+# --------------------------------------------------------------------------- #
+# Email verification tokens
+# --------------------------------------------------------------------------- #
+
+
+def email_verify_key(token_hash: str) -> str:
+    return f"{EMAIL_VERIFY_PREFIX}:{token_hash}"
+
+
+async def store_email_verification_token(token_hash: str, user_id: str, ttl_seconds: int) -> None:
+    """Store a single-use email-verification token → user_id mapping with TTL."""
+    await redis_setex(email_verify_key(token_hash), user_id, ttl_seconds)
+
+
+async def get_email_verification_user_id(token_hash: str) -> str | None:
+    """Return the user_id for a verification token, or None if missing/expired."""
+    return await redis_get(email_verify_key(token_hash))
+
+
+async def delete_email_verification_token(token_hash: str) -> int:
+    """Delete a verification token after use."""
+    return await redis_delete(email_verify_key(token_hash))
 
 
 # --------------------------------------------------------------------------- #

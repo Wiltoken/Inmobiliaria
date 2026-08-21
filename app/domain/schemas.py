@@ -214,6 +214,18 @@ class ResetPasswordResponse(BaseModel):
     message: str = "Password has been reset successfully."
 
 
+class VerifyEmailRequest(BaseModel):
+    """POST /api/v1/auth/verify-email request body."""
+
+    token: Annotated[str, Field(min_length=1)]
+
+
+class VerifyEmailResponse(BaseModel):
+    """POST /api/v1/auth/verify-email response."""
+
+    message: str = "Email verified successfully."
+
+
 # ── Admin schemas ────────────────────────────────────────────────────────────────
 
 

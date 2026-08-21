@@ -20,16 +20,17 @@ log = logging.getLogger(__name__)
 # ── Low-level SMTP ────────────────────────────────────────────────────────────
 
 
-def _send_smtp_email(
+def send_email_sync(
     to_email: str,
     subject: str,
     html_body: str,
     text_body: str,
 ) -> None:
-    """Send an email via the configured SMTP server.
+    """Send an email via the configured SMTP server (synchronous).
 
-    Raises on connection failure so callers can log and continue
-    rather than crashing the request.
+    Skips silently when SMTP is not configured (dev/tests). Raises on
+    connection failure so callers can log and continue rather than crashing
+    the request.
     """
     if not settings.smtp_host:
         log.warning(
@@ -61,6 +62,21 @@ def _send_smtp_email(
     except Exception as exc:
         # Log and continue — notifications are best-effort
         log.error(f"smtp_notification_failed to={to_email} error={exc}")
+
+
+def _dispatch_email(to_email: str, subject: str, html_body: str, text_body: str) -> None:
+    """Send an email asynchronously via Celery, falling back to sync send.
+
+    The Celery worker performs the SMTP I/O so the API request never blocks.
+    If the broker is unavailable (tests/dev without Redis), fall back to a
+    direct synchronous send.
+    """
+    try:
+        from app.core.celery_app import send_email
+
+        send_email.delay(to_email, subject, html_body, text_body)
+    except Exception:
+        send_email_sync(to_email, subject, html_body, text_body)
 
 
 # ── Notification templates ────────────────────────────────────────────────────
@@ -158,7 +174,7 @@ Log in to your dashboard to respond.
         cta_link=cta_link,
     )
 
-    _send_smtp_email(owner_email, subject, html_body, text_body)
+    _dispatch_email(owner_email, subject, html_body, text_body)
 
 
 def send_inquiry_response_notification(
@@ -207,4 +223,39 @@ def send_inquiry_response_notification(
         cta_link=None,
     )
 
-    _send_smtp_email(buyer_email, subject, html_body, text_body)
+    _dispatch_email(buyer_email, subject, html_body, text_body)
+
+
+# ── Account lifecycle emails (verification + password reset) ──────────────────
+
+
+def send_verification_email(to_email: str, verification_url: str) -> None:
+    """Send the account email-verification link."""
+    subject = "Verifica tu cuenta — Inmobiliaria"
+    text_body = (
+        "Verifica tu cuenta de Inmobiliaria.\n\n"
+        f"Haz clic en este enlace para confirmar tu correo:\n{verification_url}\n\n"
+        "Si no creaste esta cuenta, ignora este mensaje.\n"
+    )
+    html_body = _build_html_email(
+        title="Verifica tu cuenta",
+        body_lines=["Confirma tu dirección de correo para activar tu cuenta."],
+        cta_link=verification_url,
+    )
+    _dispatch_email(to_email, subject, html_body, text_body)
+
+
+def send_password_reset_email(to_email: str, reset_url: str) -> None:
+    """Send the password reset link."""
+    subject = "Restablece tu contraseña — Inmobiliaria"
+    text_body = (
+        "Restablece tu contraseña de Inmobiliaria.\n\n"
+        f"Haz clic en este enlace para elegir una nueva contraseña (expira en 15 minutos):\n{reset_url}\n\n"
+        "Si no solicitaste restablecer la contraseña, ignora este mensaje.\n"
+    )
+    html_body = _build_html_email(
+        title="Restablece tu contraseña",
+        body_lines=["El enlace expira en 15 minutos."],
+        cta_link=reset_url,
+    )
+    _dispatch_email(to_email, subject, html_body, text_body)

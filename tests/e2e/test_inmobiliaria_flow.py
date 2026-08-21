@@ -310,7 +310,7 @@ class TestInquiryNotificationsE2E:
         property_id = publish_resp.json()["id"]
 
         # Mock SMTP before creating inquiry
-        with patch("app.core.notifications._send_smtp_email") as mock_send:
+        with patch("app.core.notifications.send_email_sync") as mock_send:
             mock_send.return_value = None
 
             inquiry_resp = await e2e_client.post(
@@ -385,7 +385,7 @@ class TestInquiryNotificationsE2E:
         inquiry_id = inquiry_resp.json()["id"]
 
         # Seller accepts — buyer should be notified
-        with patch("app.core.notifications._send_smtp_email") as mock_send:
+        with patch("app.core.notifications.send_email_sync") as mock_send:
             mock_send.return_value = None
 
             accept_resp = await e2e_client.patch(
@@ -456,7 +456,7 @@ class TestInquiryNotificationsE2E:
         inquiry_id = inquiry_resp.json()["id"]
 
         # Seller declines
-        with patch("app.core.notifications._send_smtp_email") as mock_send:
+        with patch("app.core.notifications.send_email_sync") as mock_send:
             mock_send.return_value = None
 
             decline_resp = await e2e_client.patch(
@@ -605,7 +605,7 @@ class TestInquiryNotificationsE2E:
         headers_buyer = {"Authorization": f"Bearer {buyer_token}"}
         headers_seller = {"Authorization": f"Bearer {seller_token}"}
 
-        with patch("app.core.notifications._send_smtp_email"):
+        with patch("app.core.notifications.send_email_sync"):
             # Seller publishes
             prop_resp = await e2e_client.post(
                 "/api/v1/properties",
@@ -679,7 +679,7 @@ class TestInquiryNotificationsE2E:
         headers_buyer = {"Authorization": f"Bearer {buyer_token}"}
         headers_seller = {"Authorization": f"Bearer {seller_token}"}
 
-        with patch("app.core.notifications._send_smtp_email"):
+        with patch("app.core.notifications.send_email_sync"):
             prop_resp = await e2e_client.post(
                 "/api/v1/properties",
                 headers=headers_seller,
@@ -739,7 +739,7 @@ class TestInquiryNotificationsE2E:
         headers_buyer = {"Authorization": f"Bearer {buyer_token}"}
         headers_seller = {"Authorization": f"Bearer {seller_token}"}
 
-        with patch("app.core.notifications._send_smtp_email"):
+        with patch("app.core.notifications.send_email_sync"):
             # Create 2 properties and 2 inquiries
             for i in range(2):
                 prop_resp = await e2e_client.post(
@@ -841,7 +841,7 @@ class TestInquiryNotificationsE2E:
         property_id = prop_resp.json()["id"]
 
         # Buyer creates inquiry with phone-only preference
-        with patch("app.core.notifications._send_smtp_email") as mock_send:
+        with patch("app.core.notifications.send_email_sync") as mock_send:
             mock_send.return_value = None
 
             inquiry_resp = await e2e_client.post(

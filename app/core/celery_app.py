@@ -9,9 +9,11 @@ from celery import Celery
 from celery.schedules import crontab
 
 # ── Broker & Result Backend ────────────────────────────────────────────────────
-
-broker_url = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/1")
-result_backend = os.getenv("REDIS_URL", "redis://redis:6379/0")
+# Defaults point at localhost so dev/tests fail fast (no flaky DNS lookup on the
+# `redis` service hostname); production sets CELERY_BROKER_URL / REDIS_URL to the
+# compose service names explicitly.
+broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
+result_backend = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # ── Serialization ──────────────────────────────────────────────────────────────
 
@@ -32,6 +34,21 @@ task_reject_on_worker_lost = True
 # Retry policy
 task_default_retry_delay = 60  # 1 minute
 task_max_retries = 3
+
+# Fail fast when the broker is unavailable (dev/tests): do not retry the broker
+# connection or the publish 100× with backoff. Callers fall back to a synchronous
+# send on the resulting exception instead of hanging.
+broker_connection_retry = False
+task_publish_retry = False
+
+# Same for the result backend: apply_async also tries to reach the result store,
+# so disable its retry loop too (otherwise .delay() blocks ~20s in dev/tests).
+result_backend_transport_options = {
+    "retry_policy": {
+        "max_retries": 0,
+        "timeout": 1.0,
+    }
+}
 
 # ── Worker Configuration ───────────────────────────────────────────────────────
 
@@ -176,6 +193,22 @@ def match_recompute() -> dict:
         return {"status": "success", **result}
     except Exception as exc:
         return {"status": "error", "message": str(exc)}
+
+
+@celery_app.task(name="app.core.celery_app.tasks.send_email")
+def send_email(to_email: str, subject: str, html_body: str, text_body: str) -> dict:
+    """Send an email asynchronously via the configured SMTP server.
+
+    Runs in the worker so the API request never blocks on SMTP I/O.
+    Returns a best-effort status dict (never re-raises).
+    """
+    from app.core.notifications import send_email_sync
+
+    try:
+        send_email_sync(to_email, subject, html_body, text_body)
+        return {"status": "sent", "to": to_email}
+    except Exception as exc:  # noqa: BLE001 — best-effort, logged downstream
+        return {"status": "error", "to": to_email, "message": str(exc)}
 
 
 @celery_app.task(name="app.core.celery_app.tasks.cleanup_expired_tokens")

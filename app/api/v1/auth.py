@@ -7,6 +7,7 @@ POST /api/v1/auth/logout
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -19,7 +20,10 @@ from sqlalchemy.orm import selectinload
 from app.adapters.google_recaptcha import get_captcha_verifier
 from app.adapters.redis_client import (
     blacklist_token,
+    delete_email_verification_token,
+    get_email_verification_user_id,
     revoke_refresh_token,
+    store_email_verification_token,
     store_refresh_token,
     touch_last_active,
 )
@@ -35,6 +39,7 @@ from app.core.exceptions import (
     TokenExpiredError,
     TokenRevokedError,
 )
+from app.core.notifications import send_password_reset_email, send_verification_email
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -69,6 +74,8 @@ from app.domain.schemas import (
     ResetPasswordRequest,
     ResetPasswordResponse,
     RoleSummary,
+    VerifyEmailRequest,
+    VerifyEmailResponse,
 )
 from app.ports.captcha import CaptchaVerificationError
 
@@ -239,6 +246,19 @@ async def register(
 
     await session.commit()
 
+    # Email verification: generate a single-use token, store it in Redis, and
+    # enqueue the verification email (async via Celery). The account is usable
+    # immediately but marked unverified until the link is confirmed.
+    verification_token = secrets.token_urlsafe(32)
+    verification_token_hash = hash_token(verification_token)
+    await store_email_verification_token(
+        verification_token_hash,
+        str(user.id),
+        ttl_seconds=settings.email_verification_ttl_hours * 3600,
+    )
+    verification_url = f"{settings.app_base_url}/verify-email?token={verification_token}"
+    send_verification_email(user.email, verification_url)
+
     # Issue tokens (mirrors login)
     jti = str(uuid.uuid4())
     refresh_jti = str(uuid.uuid4())
@@ -288,6 +308,56 @@ async def register(
             roles=[RoleSummary(id=role.id, name=role.name)],
         ),
     )
+
+
+# ── POST /api/v1/auth/verify-email ─────────────────────────────────────────────
+
+
+@router.post(
+    "/verify-email",
+    response_model=VerifyEmailResponse,
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid or expired verification token"},
+    },
+)
+async def verify_email(
+    body: VerifyEmailRequest,
+    session: AsyncSession = Depends(get_db),
+) -> VerifyEmailResponse:
+    """Verify a user's email using the single-use token from the email link.
+
+    Flow:
+    1. Look up the token hash in Redis
+    2. Mark the user's ``is_verified`` True
+    3. Delete the token (single-use)
+    """
+    token_hash = hash_token(body.token)
+    user_id_str = await get_email_verification_user_id(token_hash)
+
+    if not user_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+            headers={"error_code": "AUTH_INVALID_VERIFICATION_TOKEN"},
+        )
+
+    result = await session.execute(select(User).where(User.id == uuid.UUID(user_id_str)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+            headers={"error_code": "AUTH_INVALID_VERIFICATION_TOKEN"},
+        )
+
+    user.is_verified = True
+    await delete_email_verification_token(token_hash)
+    await session.commit()
+
+    log.info("email_verified", user_id=str(user.id))
+
+    return VerifyEmailResponse()
 
 
 # ── POST /api/v1/auth/login ────────────────────────────────────────────────────
@@ -744,10 +814,8 @@ async def forgot_password(
         return ForgotPasswordResponse()
 
     # Generate reset token
-    import secrets
-
     raw_token = secrets.token_urlsafe(32)
-    token_hash = hash_token(raw_token)  # store hash, not raw token
+    token_hash = hash_token(raw_token)  # deterministic hash, not raw token
 
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
@@ -759,14 +827,14 @@ async def forgot_password(
     session.add(reset_entry)
     await session.commit()
 
-    # Log the token URL-safe representation for dev/tracing
-    # In production this would be sent via SMTP; we emit it to structured log
+    # Send the reset email (async via Celery) with a link to the frontend.
+    reset_url = f"{settings.app_base_url}/reset-password?token={raw_token}"
+    send_password_reset_email(user.email, reset_url)
+
     log.info(
         "password_reset_token_issued",
         user_id=str(user.id),
         ip=ip,
-        # Token is NOT logged in production — here for development traceability only
-        _token_log = raw_token[:8] + "...",
     )
 
     # Audit log
@@ -811,13 +879,14 @@ async def reset_password(
     """
     ip = _get_client_ip(request)
 
-    # Look up the most recent unused token for any user
+    # Look up the token by its deterministic SHA-256 hash (single-use, unexpired)
+    token_hash = hash_token(body.token)
     result = await session.execute(
         select(PasswordReset, User)
         .join(User, PasswordReset.user_id == User.id)
+        .where(PasswordReset.token_hash == token_hash)
         .where(PasswordReset.used_at.is_(None))
         .where(PasswordReset.expires_at > datetime.now(timezone.utc))
-        .order_by(PasswordReset.expires_at.desc())
     )
     row = result.first()
 
@@ -832,21 +901,6 @@ async def reset_password(
     reset_entry: PasswordReset
     user: User
     reset_entry, user = row
-
-    # Verify the token against stored hash
-    # We re-verify using passlib's verify_and_update on each stored hash
-    # Since we don't have the raw token stored, we check by attempting
-    # to verify the raw token against the stored hash (passlib verifies correctly)
-    # Note: hash_password() would hash again, so we use verify_password directly
-    # on the candidate token. But we stored hash_password(raw_token) as token_hash.
-    # We need a direct verify against the token_hash without re-hashing.
-    if not verify_password(body.token, reset_entry.token_hash):
-        log.warning("reset_password_invalid_token", user_id=str(user.id), ip=ip)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token",
-            headers={"error_code": "AUTH_INVALID_RESET_TOKEN"},
-        )
 
     # Hash the new password (raises PasswordPolicyError if invalid)
     try:

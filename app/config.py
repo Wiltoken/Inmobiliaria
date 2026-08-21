@@ -45,6 +45,9 @@ class AuthSettings(BaseSettings):
     access_token_expire_minutes: int = Field(default=15, description="Access token TTL in minutes.")
     refresh_token_expire_days: int = Field(default=7, description="Refresh token TTL in days.")
     inactivity_timeout_minutes: int = Field(default=30, description="Session inactivity timeout in minutes.")
+    email_verification_ttl_hours: int = Field(
+        default=24, ge=1, description="Email verification link TTL in hours."
+    )
 
     # ── Security: Password Policy ─────────────────────────────────────────────
     password_min_length: int = Field(default=8, ge=1, le=256, description="Minimum password length.")

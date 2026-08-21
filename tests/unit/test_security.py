@@ -160,14 +160,15 @@ class TestHashPassword:
 
 
 class TestHashToken:
-    """Tests for hash_token() — machine-generated tokens bypass policy."""
+    """Tests for hash_token() — deterministic SHA-256 for lookup tokens."""
 
     def test_hash_token_returns_string(self) -> None:
-        """hash_token returns a bcrypt hash without policy validation."""
+        """hash_token returns a 64-char deterministic SHA-256 hex digest."""
         hashed = hash_token("random-machine-token-abc123")
         assert isinstance(hashed, str)
-        assert len(hashed) > 0
-        assert hashed.startswith("$2b$")
+        assert len(hashed) == 64
+        # Deterministic — same input yields the same digest (lookup by hash).
+        assert hash_token("random-machine-token-abc123") == hashed
 
     def test_hash_token_skips_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """hash_token does NOT raise even with a very short token."""
@@ -185,7 +186,7 @@ class TestHashToken:
         )
         # Should not raise — tokens bypass policy
         hashed = hash_token("x")
-        assert hashed.startswith("$2b$")
+        assert len(hashed) == 64
 
 
 class TestVerifyPassword:
