@@ -92,6 +92,10 @@ class AuthSettings(BaseSettings):
         default="http://localhost:8000",
         description="Base URL for the application (used in email links).",
     )
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000",
+        description="Comma-separated list of allowed CORS origins (browser frontend).",
+    )
 
     # ── Matching ──────────────────────────────────────────────────────────────
     match_cache_ttl_seconds: int = Field(

@@ -78,7 +78,7 @@ app.add_middleware(RateLimitMiddleware) # 3. RateLimit — token bucket per IP
 app.add_middleware(AuditLogMiddleware)  # 2. AuditLog — logs auth events
 app.add_middleware(                     # 1. CORS — first to add, last to run
     CORSMiddleware,
-    allow_origins=["*"],  # tighten for production
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
