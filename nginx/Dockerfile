@@ -15,6 +15,10 @@ RUN npm run build
 # ── Stage 2: nginx serving the built SPA + proxying the API ───────────────
 FROM nginx:alpine
 
+# Remove the base image's default.conf, which otherwise competes with our
+# vhost (same listen port) and serves /usr/share/nginx/html.
+RUN rm -f /etc/nginx/conf.d/default.conf
+
 COPY --from=frontend-build /build/dist /app/static
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/conf.d /etc/nginx/conf.d

@@ -36,7 +36,7 @@ task_max_retries = 3
 # ── Worker Configuration ───────────────────────────────────────────────────────
 
 worker_prefetch_multiplier = 4
-worker_concurrency = os.getenv("CELERY_CONCURRENCY", "4")
+worker_concurrency = int(os.getenv("CELERY_CONCURRENCY", "4"))
 worker_max_tasks_per_child = 1000  # Recycle workers to prevent memory leaks
 
 # ── Beat Schedule ─────────────────────────────────────────────────────────────
