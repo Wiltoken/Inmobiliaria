@@ -1,29 +1,88 @@
 # Inmobiliaria Platform
 
-A production-grade real estate platform built with FastAPI, PostgreSQL/PostGIS, Redis, and Celery.
+Plataforma inmobiliaria para compradores, vendedores y agentes — FastAPI + React + PostgreSQL/PostGIS.
+
+---
+
+## 🔐 Accesos (Repo Privado)
+
+### Frontend
+
+| Entorno | URL |
+|---------|-----|
+| Local | http://localhost:3000 |
+| Remoto (túnel) | https://inmobiliaria-demo.loca.lt |
+
+### Backend API
+
+| Entorno | URL |
+|---------|-----|
+| Local | http://localhost:8000 |
+| Swagger Docs | http://localhost:8000/docs |
+| Remoto (túnel) | https://inmobiliaria-api.loca.lt |
+| Swagger Remoto | https://inmobiliaria-api.loca.lt/docs |
+
+### Servicios de Infraestructura
+
+| Servicio | URL | Usuario / Contraseña |
+|----------|-----|---------------------|
+| PostgreSQL | localhost:5432 | `inmuebles` / `changeme` |
+| Redis | localhost:6379 | (sin contraseña) |
+| MinIO Console | http://localhost:9001 | `minioadmin` / `minioadmin` |
+| MinIO API (S3) | http://localhost:9000 | `minioadmin` / `minioadmin` |
+
+### Credenciales de Usuarios
+
+| Rol | Usuario | Email | Contraseña |
+|-----|---------|-------|------------|
+| **Super Admin** | `admin` | admin@inmobiliaria.com | `Admin123!` |
+| **Agent** | `agent1` | agent1@inmobiliaria.com | `Agent123!` |
+| **Agent** | `agent2` | agent2@inmobiliaria.com | `Agent123!` |
+| **Agent** | `agent3` | agent3@inmobiliaria.com | `Agent123!` |
+| **Seller** | `seller1` | seller1@inmobiliaria.com | `Seller123!` |
+| **Seller** | `seller2` | seller2@inmobiliaria.com | `Seller123!` |
+| **Seller** | `seller3` | seller3@inmobiliaria.com | `Seller123!` |
+| **Seller** | `seller4` | seller4@inmobiliaria.com | `Seller123!` |
+| **Seller** | `seller5` | seller5@inmobiliaria.com | `Seller123!` |
+| **Buyer** | `buyer1` | buyer1@inmobiliaria.com | `Buyer123!` |
+| **Buyer** | `buyer2` | buyer2@inmobiliaria.com | `Buyer123!` |
+| **Buyer** | `buyer3` | buyer3@inmobiliaria.com | `Buyer123!` |
+
+> ⚠️ Estos usuarios se crean ejecutando `python scripts/seed.py` contra la base de datos.
+
+### GitHub
+
+| Dato | Valor |
+|------|-------|
+| Repo | https://github.com/Wiltoken/Inmobiliaria (privado) |
+| SSH | `git@github.com:Wiltoken/Inmobiliaria.git` |
+| Branch principal | `main` |
+| Branch activa | `feat/etapa-2-infra` |
+
+---
 
 ## Quick Start
 
 ```bash
-# 1. Clone and configure
-git clone https://github.com/your-org/inmobiliaria.git
-cd inmobiliaria
-cp .env.example .env
-# Edit .env — set SECRET_KEY (required)
+# 1. Clonar
+git clone git@github.com:Wiltoken/Inmobiliaria.git
+cd Inmobiliaria
 
-# 2. Start production environment
-make prod
+# 2. Levantar servicios
+docker compose up -d
 
-# 3. Run migrations
-make migrate
+# 3. Correr seed (usuarios de prueba)
+python scripts/seed.py
 
-# 4. Create admin user (see docs/DEPLOYMENT.md)
+# 4. Frontend
+cd frontend && npm install && npm run dev
 ```
 
-**Access:**
+**Accesos locales:**
+- Frontend: http://localhost:3000
 - API: http://localhost:8000
 - Docs: http://localhost:8000/docs
-- MinIO Console: http://localhost:9001
+- MinIO: http://localhost:9001
 
 ## Architecture
 
