@@ -86,9 +86,10 @@ async def get_current_user(request: Request) -> User:
 async def get_current_active_user(
     request: Request,
 ) -> User:
-    """Return the current user and check they are active and not locked.
+    """Return the current user and check they are active, not locked, and not
+    idle-expired.
 
-    Raises 401 if account is inactive or locked.
+    Raises 401 if account is inactive or the session expired, 423 if locked.
     """
     user = await get_current_user(request)
 
@@ -107,6 +108,9 @@ async def get_current_active_user(
             detail="Account is locked",
             headers={"X-Locked-Until": locked_until_str or ""},
         )
+
+    # Enforce the session-inactivity window (sliding TTL in Redis).
+    await check_session_active(user.id)
 
     return user
 
@@ -169,15 +173,18 @@ async def check_session_active(user_id: uuid.UUID) -> None:
     )
 
 
-def require_session_active(
-    user_id: uuid.UUID,
-) -> None:
-    """Dependency wrapper for check_session_active.
+async def require_session_active(
+    user: User = Depends(get_current_active_user),
+) -> User:
+    """Dependency that enforces an active (non-idle-expired) session.
+
+    ``get_current_active_user`` already enforces the sliding inactivity window,
+    so this is an explicit alias for callers that want to state the requirement
+    at the endpoint signature.
 
     Usage:
-        user: User = Depends(get_current_active_user),
-        ...
-    ) -> None:
-        await check_session_active(user.id)
+        @router.get("/x")
+        async def x(user: User = Depends(require_session_active)):
+            ...
     """
-    return check_session_active(user_id)
+    return user

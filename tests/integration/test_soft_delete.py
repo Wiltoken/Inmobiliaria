@@ -18,9 +18,16 @@ from app.domain.models import (
 )
 
 
-def _auth_headers(user: User, roles: list[str]) -> dict[str, str]:
-    """Build an Authorization header with a valid access token for the user."""
+async def _auth_headers(user: User, roles: list[str]) -> dict[str, str]:
+    """Build an Authorization header with a valid access token for the user.
+
+    Seeds the Redis last_active key so the session-inactivity check (enforced
+    by get_current_active_user) passes for directly-created tokens.
+    """
+    from app.adapters.redis_client import touch_last_active
+
     token = create_access_token(user.id, user.tenant_id, roles, str(uuid.uuid4()))
+    await touch_last_active(str(user.id), ttl_seconds=3600)
     return {"Authorization": f"Bearer {token}"}
 
 

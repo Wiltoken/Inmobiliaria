@@ -13,6 +13,23 @@ from typing import Any
 import jwt
 from passlib.context import CryptContext
 
+# ── Monkeypatch: passlib 1.7.4 + bcrypt 4.x incompatibility ──────────────
+# detect_wrap_bug in passlib 1.7.4 sends a 73-byte password to bcrypt.hashpw
+# which rejects it. Patch bcrypt.hashpw to silently truncate.
+import bcrypt as _bcrypt_mod
+
+_orig_hashpw = _bcrypt_mod.hashpw
+
+def _safe_hashpw(password, salt, **kwargs):
+    if isinstance(password, str):
+        password = password.encode("utf-8")
+    if len(password) > 72:
+        password = password[:72]
+    return _orig_hashpw(password, salt, **kwargs)
+
+_bcrypt_mod.hashpw = _safe_hashpw
+# ── End monkeypatch ───────────────────────────────────────────────────────
+
 from app.config import settings
 from app.core.exceptions import (
     InvalidTokenError,
