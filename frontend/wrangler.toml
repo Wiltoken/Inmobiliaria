@@ -1,0 +1,12 @@
+# Cloudflare Pages configuration
+# https://developers.cloudflare.com/pages/configuration/wrangler-configuration/
+
+name = "inmobiliaria-frontend"
+compatibility_date = "2024-01-01"
+
+# Build output directory
+[site]
+  bucket = "./dist"
+
+# Environment variables (set these in Cloudflare dashboard)
+# VITE_API_URL = https://your-railway-app.up.railway.app/api/v1

@@ -1,0 +1,16 @@
+# Railway configuration
+# https://docs.railway.app/reference/configuration
+
+[build]
+  builder = "nixpacks"
+
+[deploy]
+  startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+  healthcheckPath = "/health"
+  healthcheckTimeout = 300
+  restartPolicyType = "on_failure"
+  restartPolicyMaxRetries = 3
+
+[environment]
+  APP_ENV = "production"
+  LOG_LEVEL = "INFO"

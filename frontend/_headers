@@ -1,0 +1,24 @@
+# Build configuration for Cloudflare Pages
+# https://developers.cloudflare.com/pages/configuration/build-configuration/
+
+[build]
+  command = "npm run build"
+  directory = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Headers for PWA support
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# SPA routing - all paths serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
